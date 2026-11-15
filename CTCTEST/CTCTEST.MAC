@@ -1,0 +1,346 @@
+; ***************************************************
+; *                                                 *
+; *  CTC-Testprogramm       Version vom 15.11.2026  *
+; *                                                 *
+; ***************************************************
+;
+; Dokumentation:
+; - Test der Interruptfunktion der CTC
+; - Kanal 0 und 1 der CTC sind verbunden
+; - Interrupt alle 20 Millisekunden
+;
+; ***************************************************
+; *  Wichtig: Fuer das AC1-Programm muss die        *
+; *           folgende Zeile auskommentiert werden  *
+; ***************************************************
+CPM     EQU  1            ;CP/M-Version
+;
+        PAGE 64
+        IF1
+        IFDEF CPM
+        .PRINTX 'CP/M-Version'
+        ELSE
+        .PRINTX 'Version fuer den AC1-Monitor'
+        ENDIF
+        .PRINTX 'PASS 1'
+        ENDIF
+;
+        IF2
+        .PRINTX 'PASS 2'
+        ENDIF
+;
+        .CREF
+        .Z80
+        IFDEF CPM
+        .PHASE 100H       ;CP/M-Programm startet bei 100H
+        ELSE
+        .PHASE 4000H      ;AC1-Programm startet bei 4000H
+        ENDIF
+;
+WBOOT   EQU  00000H       ;Warmstart
+CONST   EQU  0E606H       ;BIOS - CONST
+CONIN   EQU  0E609H       ;BIOS - CONIN
+CONOUT  EQU  0E60CH       ;BIOS - CONOUT
+;
+GETCO   EQU  07FDH        ;AC1-Monitor - Eingabeschleife
+;
+CTC     EQU  00H          ;CTC - Portadresse
+;
+        JP   START
+        DEFS 5,0
+;
+;
+; Interruptvektoren-Tabelle
+;
+        IFDEF CPM
+IV      EQU  0FF90H       ;USER-Interruptvektoren
+        ELSE
+IV:     DEFS 8,0          ;im AC1-Monitor Adr. 4008H
+        ENDIF
+;
+; UP Taste gedrueckt?
+; ===================
+;
+TASTE:
+        IFDEF CPM
+PATCH1: CALL CONST        ;CP/M: CONST
+        ELSE
+        IN   A,(04H)      ;AC1: PIO1 Port A lesen
+        RES  7,A
+        OR   A
+        JR   Z,TASTE1
+        LD   A,0FFH       ;Taste gedrueckt
+        ENDIF
+TASTE1: RET
+;
+; UP Zeicheneingabe
+; =================
+;
+INZEI:
+        IFDEF CPM
+PATCH2: CALL CONIN        ;CP/M: CONIN
+        ELSE
+INZEI1: IN   A,(04H)      ;AC1: PIO1 Port A lesen
+        RES  7,A
+        OR   A
+        JR   NZ,INZEI1    ;(falsche) Taste gedrueckt
+INZEI2: IN   A,(04H)      ;AC1: PIO1 Port A lesen
+        RES  7,A
+        OR   A
+        JR   Z,INZEI2     ;keine Taste gedrueckt
+        ENDIF
+        RET
+;
+; UP Zeichenausgabe
+; =================
+;
+OUTZEI: PUSH AF
+        PUSH BC
+        IFDEF CPM
+PATCH3: CALL CONOUT       ;CP/M: CONOUT
+        ELSE
+        LD  A,C
+        CP  0AH           ;AC1: 0AH nicht ausgeben
+        JR  Z,OUTZE1
+        RST 10H           ;AC1: RST 10H
+        ENDIF
+OUTZE1: POP  BC
+        POP  AF
+        RET
+;
+; UP Textausgabe
+; ==============
+;
+OUTTXT: PUSH AF
+        PUSH BC
+OUTTX1: LD   A,(HL)
+        CP   0            ;Ende
+        JR   Z,OUTTX3
+        IFDEF CPM
+        LD   C,A
+PATCH4: CALL CONOUT       ;CP/M: CONOUT
+        ELSE
+        CP  0AH           ;0AH nicht ausgeben
+        JR  Z,OUTTX2
+        RST 10H           ;AC1: RST 10H
+        ENDIF
+OUTTX2: INC  HL
+        JR   OUTTX1
+OUTTX3: POP  BC
+        POP  AF
+        RET
+;
+; Bildschirmausschriften
+; ======================
+;
+ANFTXT: DEFB 0DH,0AH,0DH,0AH
+        DEFM "CTC-Testprogramm"
+        DEFB 0DH,0AH
+        DEFM "----------------"
+        DEFB 0DH,0AH,0DH,0AH
+        DEFM "- Test der Interruptfunktion der CTC"
+        DEFB 0DH,0AH
+        DEFM "- Nutzung des CPU-Taktes fuer Kanal 0"
+        DEFB 0DH,0AH
+        DEFM "- Kanal 0 und 1 der CTC sind verbunden"
+        DEFB 0DH,0AH
+        DEFM "- Interrupt alle 20 Millisekunden"
+        DEFB 0DH,0AH
+        DEFM "- AC1 System-CTC hat die I/O-Adresse: 00"
+        DEFB 0DH,0AH
+        DEFM "- I/O-Adresse der AC1 Soundkarte-CTC: 3C"
+        DEFB 0DH,0AH,0DH,0AH
+        DEFM "Eingabe der I/O-Adresse (hex) = "
+        DEFB 00H
+;
+KORTXT: DEFM " --> Korrektur: "
+        DEFB 00H
+;
+BRKTXT: DEFB 0DH,0AH,0DH,0AH
+        DEFM "Abbruch!"
+        DEFB 0DH,0AH,0DH,0AH,00H
+;
+RDYTXT: DEFB 0DH,0AH,0DH,0AH
+        DEFM "Funktioniert!"
+        DEFB 0DH,0AH,0DH,0AH,00H
+;
+CTCTXT: DEFB 0DH,0AH
+        DEFM "Fehler: keine CTC auf dieser Adresse!"
+        DEFB 0DH,0AH,0DH,0AH,00H
+;
+NL1TXT: DEFB 0DH,0AH,00H
+;
+NL2TXT: DEFB 0DH,0AH,0DH,0AH,00H
+;
+; Programmstart
+; =============
+;
+START:
+        IFDEF CPM
+        LD   SP,0100H     ;CP/M - Stack
+        ELSE
+        DEFB 00H,09H,78H,0DH
+        LD   SP,1856H     ;AC1 - Stack
+        ENDIF
+;
+; BIOS-Routinen: HWT-Adresse patchen
+; ==================================
+;
+        IFDEF CPM
+        LD   A,(WBOOT+2)  ;HWT Adresse WBOOT lesen
+        LD   (PATCH1+2),A ;HWT Adresse CONST
+        LD   (PATCH2+2),A ;HWT Adresse CONIN
+        LD   (PATCH3+2),A ;HWT Adresse CONOUT
+        LD   (PATCH4+2),A ;HWT Adresse CONOUT
+        ENDIF
+;
+; Anfangstext und Kanalauswahl
+; ============================
+;
+        LD   HL,ANFTXT    ;Anfangstext
+        CALL OUTTXT
+        CALL INHEX        ;1. HEX-Wert
+        LD   H,C
+        AND  0FH          ;Maske: 0..F
+        RLCA
+        RLCA
+        RLCA
+        RLCA
+        LD   D,A
+        CALL INHEX        ;2. HEX-Wert
+        AND  0CH          ;Maske: 0,4,8,C
+        OR   D
+        LD   E,A          ;unteres I/O-Adressbyte
+;
+; Test der Eingabe
+; ================
+;
+        AND  0CH          ;Test unteres Adressbyte
+        OR   '0'
+        CP   3CH
+        JR   NZ,TEST1
+        ADD  A,7          ;3C --> 'C'
+TEST1:  LD   L,A
+        CP   C
+        JR   Z,TEST2
+        PUSH HL
+        LD   HL,KORTXT    ;--> Korrektur:
+        CALL OUTTXT
+        POP  HL
+        LD   C,H
+        CALL OUTZEI
+        LD   C,L
+        CALL OUTZEI
+TEST2:  LD   HL,NL2TXT
+        CALL OUTTXT
+;
+; CTC - Initialisierung
+; =====================
+;
+        DI
+        LD   HL,ISRCTC    ;Einsprungpunkt CTC-Interrupt
+        LD   (IV+2),HL
+        LD   A,HIGH(IV)   ;Int.-vektor HWT
+        LD   I,A
+        LD   A,LOW(IV)    ;Int.-vektor NWT --> 4008H
+        LD   B,0          ;oberes I/O-Adressbyte
+        LD   C,E          ;unteres I/O-Adressbyte
+        OUT  (C),A
+        LD   A,27H        ;Kanalsteuerwort
+        OUT  (C),A
+        LD   A,4          ;Zeitkonstante
+        OUT  (C),A
+        LD   A,0C7H       ;Kanalsteuerwort
+        OUT  (CTC+1),A
+        LD   A,39         ;Zeitkonstante
+        OUT  (CTC+1),A
+        IM   2
+;
+; Interruptfreigabe und Loop
+; ==========================
+;
+
+        EI
+        LD   C,' '        ;1. Zeichen
+        LD   B,191        ;Anzahl der Zeichen
+        LD   HL,0
+        LD   D,5
+M1:     DEC  HL
+        LD   A,H
+        OR   L
+        JR   NZ,M2
+        DEC  D
+        JR   Z,NOCTC      ;keine CTC auf dieser Adresse!
+M2:     INC  B
+        DEC  B
+        JR   NZ,M1
+;
+; Programmende
+; ============
+;
+        LD   A,03H        ;Kanalsteuerwort - Reset
+        LD   B,0          ;oberes I/O-Adressbyte
+        LD   C,E          ;unteres I/O-Adressbyte
+        OUT  (C),A
+        INC  C
+        OUT  (C),A
+        LD   HL,RDYTXT    ;Funktioniert!
+        CALL OUTTXT
+FINIS:
+        IFDEF CPM
+        JP   WBOOT        ;CP/M: WBOOT
+        ELSE
+        JP   GETCO        ;AC1: Eingabeschleife
+        ENDIF
+;
+NOCTC:  LD   HL,CTCTXT    ;keine CTC auf dieser Adresse!
+        CALL OUTTXT
+        JR   FINIS
+;
+; Eingabe und Ausgabe einer HEX-Ziffer (Erg. in A + C)
+; ====================================
+;
+INHEX:  CALL INZEI        ;Zeicheneingabe --> A
+        LD   C,A
+        CP   03H          ;Abbruch?
+        JP   Z,ABRUCH
+        CP   '0'          ;kleiner als "0"?
+        JR   C,INHEX
+        CP   '9'+1        ;kleiner als "9"?
+        JR   C,INHEXE
+        AND  5FH          ;Kleinbuchstaben --> Grossb.
+        CP   'A'          ;kleiner als "A"?
+        JR   C,INHEX
+        CP   'F'+1        ;groesser als "F"?
+        JR   NC,INHEX
+        LD   C,A
+        SUB  7
+INHEXE: CALL OUTZEI       ;Zeichen in C ausgeben
+        SUB  '0'
+        RET
+;
+ABRUCH: LD   HL,BRKTXT    ;Anzeige: Abbruch!
+        CALL OUTTXT
+        JR   FINIS
+;
+; Interrupt-Serviceroutine
+; ========================
+;
+ISRCTC: DI                ;Interruptentry
+        LD   HL,0
+        LD   D,5
+        CALL OUTZEI       ;Zeichen in C ausgeben
+        INC  C
+        DEC  B
+        LD   A,C
+        CP   7FH
+        JR   NZ,M3
+        LD   C,' '
+M3:     EI
+        RETI
+;
+        DEFM "finis"
+;
+        .DEPHASE
+        END
+;

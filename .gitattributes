@@ -1,0 +1,8 @@
+*.ASM text eol=crlf
+*.INC text eol=crlf
+*.LST text eol=crlf
+*.COM binary
+*.Z80 binary
+*.ASM linguist-language=Assembly linguist-detectable
+*.INC linguist-language=Assembly linguist-detectable
+*.LST linguist-generated

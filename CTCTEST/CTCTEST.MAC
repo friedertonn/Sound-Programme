@@ -1,6 +1,6 @@
 ; ***************************************************
 ; *                                                 *
-; *  CTC-Testprogramm       Version vom 15.11.2026  *
+; *  CTC-Testprogramm       Version vom 16.11.2026  *
 ; *                                                 *
 ; ***************************************************
 ;
@@ -43,8 +43,6 @@ CONIN   EQU  0E609H       ;BIOS - CONIN
 CONOUT  EQU  0E60CH       ;BIOS - CONOUT
 ;
 GETCO   EQU  07FDH        ;AC1-Monitor - Eingabeschleife
-;
-CTC     EQU  00H          ;CTC - Portadresse
 ;
         JP   START
         DEFS 5,0
@@ -179,7 +177,7 @@ START:
         IFDEF CPM
         LD   SP,0100H     ;CP/M - Stack
         ELSE
-        DEFB 00H,09H,78H,0DH
+        DEFB 00H,09H,78H,0DH   ;Kennbuchstabe 'x'
         LD   SP,1856H     ;AC1 - Stack
         ENDIF
 ;
@@ -250,10 +248,11 @@ TEST2:  LD   HL,NL2TXT
         OUT  (C),A
         LD   A,4          ;Zeitkonstante
         OUT  (C),A
+        INC  C            ;I/O-Adressbyte + 1
         LD   A,0C7H       ;Kanalsteuerwort
-        OUT  (CTC+1),A
+        OUT  (C),A
         LD   A,39         ;Zeitkonstante
-        OUT  (CTC+1),A
+        OUT  (C),A
         IM   2
 ;
 ; Interruptfreigabe und Loop
@@ -282,7 +281,7 @@ M2:     INC  B
         LD   B,0          ;oberes I/O-Adressbyte
         LD   C,E          ;unteres I/O-Adressbyte
         OUT  (C),A
-        INC  C
+        INC  C            ;I/O-Adressbyte + 1
         OUT  (C),A
         LD   HL,RDYTXT    ;Funktioniert!
         CALL OUTTXT

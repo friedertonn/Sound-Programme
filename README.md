@@ -1,5 +1,7 @@
 # Sound-Programme für den AC1
 
+![Soundkarte](https://github.com/friedertonn/Sound-Programme/blob/main/Fotos/Soundkarte.jpg?raw=true)
+
 ## Hintergrund
 
 Auf der Website [Robotron](https://sites.google.com/view/robotron) wird eine Soundkarte für K1520-Systeme vorgestellt.

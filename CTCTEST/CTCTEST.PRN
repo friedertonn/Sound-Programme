@@ -3,7 +3,7 @@
 
                                 ; ***************************************************
                                 ; *                                                 *
-                                ; *  CTC-Testprogramm       Version vom 15.11.2026  *
+                                ; *  CTC-Testprogramm       Version vom 16.11.2026  *
                                 ; *                                                 *
                                 ; ***************************************************
                                 ;
@@ -51,8 +51,6 @@
                                 ;
   07FD                          GETCO   EQU  07FDH        ;AC1-Monitor - Eingabeschleife
                                 ;
-  0000                          CTC     EQU  00H          ;CTC - Portadresse
-                                ;
   0100    C3 02CE                       JP   START
   0103                                  DEFS 5,0
                                 ;
@@ -81,11 +79,11 @@
   010B    C9                    TASTE1: RET
                                 ;
                                 ; UP Zeicheneingabe
+                                ; =================
+                                ;
 	MACRO-80 3.44	09-Dec-81	PAGE	1-2
 
 
-                                ; =================
-                                ;
   010C                          INZEI:
                                         IFDEF CPM
   010C    CD E609               PATCH2: CALL CONIN        ;CP/M: CONIN
@@ -144,11 +142,11 @@
                                 ; ======================
                                 ;
   0129    0D 0A 0D 0A           ANFTXT: DEFB 0DH,0AH,0DH,0AH
+  012D    43 54 43 2D                   DEFM "CTC-Testprogramm"
+  0131    54 65 73 74           
 	MACRO-80 3.44	09-Dec-81	PAGE	1-3
 
 
-  012D    43 54 43 2D                   DEFM "CTC-Testprogramm"
-  0131    54 65 73 74           
   0135    70 72 6F 67           
   0139    72 61 6D 6D           
   013D    0D 0A                         DEFB 0DH,0AH
@@ -207,11 +205,11 @@
   01FF    20 64 69 65           
   0203    20 49 2F 4F           
   0207    2D 41 64 72           
+  020B    65 73 73 65           
+  020F    3A 20 30 30           
 	MACRO-80 3.44	09-Dec-81	PAGE	1-4
 
 
-  020B    65 73 73 65           
-  020F    3A 20 30 30           
   0213    0D 0A                         DEFB 0DH,0AH
   0215    2D 20 49 2F                   DEFM "- I/O-Adresse der AC1 Soundkarte-CTC: 3C"
   0219    4F 2D 41 64           
@@ -270,11 +268,11 @@
                                 ;
   02C6    0D 0A 00              NL1TXT: DEFB 0DH,0AH,00H
                                 ;
+  02C9    0D 0A 0D 0A           NL2TXT: DEFB 0DH,0AH,0DH,0AH,00H
+  02CD    00                    
 	MACRO-80 3.44	09-Dec-81	PAGE	1-5
 
 
-  02C9    0D 0A 0D 0A           NL2TXT: DEFB 0DH,0AH,0DH,0AH,00H
-  02CD    00                    
                                 ;
                                 ; Programmstart
                                 ; =============
@@ -283,7 +281,7 @@
                                         IFDEF CPM
   02CE    31 0100                       LD   SP,0100H     ;CP/M - Stack
                                         ELSE
-                                        DEFB 00H,09H,78H,0DH
+                                        DEFB 00H,09H,78H,0DH   ;Kennbuchstabe 'x'
                                         LD   SP,1856H     ;AC1 - Stack
                                         ENDIF
                                 ;
@@ -303,7 +301,7 @@
                                 ;
   02E0    21 0129                       LD   HL,ANFTXT    ;Anfangstext
   02E3    CD 0118                       CALL OUTTXT
-  02E6    CD 0371                       CALL INHEX        ;1. HEX-Wert
+  02E6    CD 0372                       CALL INHEX        ;1. HEX-Wert
   02E9    61                            LD   H,C
   02EA    E6 0F                         AND  0FH          ;Maske: 0..F
   02EC    07                            RLCA
@@ -311,7 +309,7 @@
   02EE    07                            RLCA
   02EF    07                            RLCA
   02F0    57                            LD   D,A
-  02F1    CD 0371                       CALL INHEX        ;2. HEX-Wert
+  02F1    CD 0372                       CALL INHEX        ;2. HEX-Wert
   02F4    E6 0C                         AND  0CH          ;Maske: 0,4,8,C
   02F6    B2                            OR   D
   02F7    5F                            LD   E,A          ;unteres I/O-Adressbyte
@@ -333,11 +331,11 @@
   030D    E1                            POP  HL
   030E    4C                            LD   C,H
   030F    CD 0110                       CALL OUTZEI
+  0312    4D                            LD   C,L
+  0313    CD 0110                       CALL OUTZEI
 	MACRO-80 3.44	09-Dec-81	PAGE	1-6
 
 
-  0312    4D                            LD   C,L
-  0313    CD 0110                       CALL OUTZEI
   0316    21 02C9               TEST2:  LD   HL,NL2TXT
   0319    CD 0118                       CALL OUTTXT
                                 ;
@@ -345,7 +343,7 @@
                                 ; =====================
                                 ;
   031C    F3                            DI
-  031D    21 039D                       LD   HL,ISRCTC    ;Einsprungpunkt CTC-Interrupt
+  031D    21 039E                       LD   HL,ISRCTC    ;Einsprungpunkt CTC-Interrupt
   0320    22 FF92                       LD   (IV+2),HL
   0323    3E FF                         LD   A,HIGH(IV)   ;Int.-vektor HWT
   0325    ED 47                         LD   I,A
@@ -357,100 +355,101 @@
   0330    ED 79                         OUT  (C),A
   0332    3E 04                         LD   A,4          ;Zeitkonstante
   0334    ED 79                         OUT  (C),A
-  0336    3E C7                         LD   A,0C7H       ;Kanalsteuerwort
-  0338    D3 01                         OUT  (CTC+1),A
-  033A    3E 27                         LD   A,39         ;Zeitkonstante
-  033C    D3 01                         OUT  (CTC+1),A
-  033E    ED 5E                         IM   2
+  0336    0C                            INC  C            ;I/O-Adressbyte + 1
+  0337    3E C7                         LD   A,0C7H       ;Kanalsteuerwort
+  0339    ED 79                         OUT  (C),A
+  033B    3E 27                         LD   A,39         ;Zeitkonstante
+  033D    ED 79                         OUT  (C),A
+  033F    ED 5E                         IM   2
                                 ;
                                 ; Interruptfreigabe und Loop
                                 ; ==========================
                                 ;
                                 
-  0340    FB                            EI
-  0341    0E 20                         LD   C,' '        ;1. Zeichen
-  0343    06 BF                         LD   B,191        ;Anzahl der Zeichen
-  0345    21 0000                       LD   HL,0
-  0348    16 05                         LD   D,5
-  034A    2B                    M1:     DEC  HL
-  034B    7C                            LD   A,H
-  034C    B5                            OR   L
-  034D    20 03                         JR   NZ,M2
-  034F    15                            DEC  D
-  0350    28 17                         JR   Z,NOCTC      ;keine CTC auf dieser Adresse!
-  0352    04                    M2:     INC  B
-  0353    05                            DEC  B
-  0354    20 F4                         JR   NZ,M1
+  0341    FB                            EI
+  0342    0E 20                         LD   C,' '        ;1. Zeichen
+  0344    06 BF                         LD   B,191        ;Anzahl der Zeichen
+  0346    21 0000                       LD   HL,0
+  0349    16 05                         LD   D,5
+  034B    2B                    M1:     DEC  HL
+  034C    7C                            LD   A,H
+  034D    B5                            OR   L
+  034E    20 03                         JR   NZ,M2
+  0350    15                            DEC  D
+  0351    28 17                         JR   Z,NOCTC      ;keine CTC auf dieser Adresse!
+  0353    04                    M2:     INC  B
+  0354    05                            DEC  B
+  0355    20 F4                         JR   NZ,M1
                                 ;
                                 ; Programmende
                                 ; ============
                                 ;
-  0356    3E 03                         LD   A,03H        ;Kanalsteuerwort - Reset
-  0358    06 00                         LD   B,0          ;oberes I/O-Adressbyte
-  035A    4B                            LD   C,E          ;unteres I/O-Adressbyte
-  035B    ED 79                         OUT  (C),A
-  035D    0C                            INC  C
-  035E    ED 79                         OUT  (C),A
-  0360    21 0284                       LD   HL,RDYTXT    ;Funktioniert!
-  0363    CD 0118                       CALL OUTTXT
-  0366                          FINIS:
+  0357    3E 03                         LD   A,03H        ;Kanalsteuerwort - Reset
+  0359    06 00                         LD   B,0          ;oberes I/O-Adressbyte
+  035B    4B                            LD   C,E          ;unteres I/O-Adressbyte
+  035C    ED 79                         OUT  (C),A
+  035E    0C                            INC  C            ;I/O-Adressbyte + 1
+  035F    ED 79                         OUT  (C),A
+  0361    21 0284                       LD   HL,RDYTXT    ;Funktioniert!
+  0364    CD 0118                       CALL OUTTXT
+  0367                          FINIS:
                                         IFDEF CPM
-  0366    C3 0000                       JP   WBOOT        ;CP/M: WBOOT
+  0367    C3 0000                       JP   WBOOT        ;CP/M: WBOOT
+                                        ELSE
 	MACRO-80 3.44	09-Dec-81	PAGE	1-7
 
 
-                                        ELSE
                                         JP   GETCO        ;AC1: Eingabeschleife
                                         ENDIF
                                 ;
-  0369    21 029A               NOCTC:  LD   HL,CTCTXT    ;keine CTC auf dieser Adresse!
-  036C    CD 0118                       CALL OUTTXT
-  036F    18 F5                         JR   FINIS
+  036A    21 029A               NOCTC:  LD   HL,CTCTXT    ;keine CTC auf dieser Adresse!
+  036D    CD 0118                       CALL OUTTXT
+  0370    18 F5                         JR   FINIS
                                 ;
                                 ; Eingabe und Ausgabe einer HEX-Ziffer (Erg. in A + C)
                                 ; ====================================
                                 ;
-  0371    CD 010C               INHEX:  CALL INZEI        ;Zeicheneingabe --> A
-  0374    4F                            LD   C,A
-  0375    FE 03                         CP   03H          ;Abbruch?
-  0377    CA 0395                       JP   Z,ABRUCH
-  037A    FE 30                         CP   '0'          ;kleiner als "0"?
-  037C    38 F3                         JR   C,INHEX
-  037E    FE 3A                         CP   '9'+1        ;kleiner als "9"?
-  0380    38 0D                         JR   C,INHEXE
-  0382    E6 5F                         AND  5FH          ;Kleinbuchstaben --> Grossb.
-  0384    FE 41                         CP   'A'          ;kleiner als "A"?
-  0386    38 E9                         JR   C,INHEX
-  0388    FE 47                         CP   'F'+1        ;groesser als "F"?
-  038A    30 E5                         JR   NC,INHEX
-  038C    4F                            LD   C,A
-  038D    D6 07                         SUB  7
-  038F    CD 0110               INHEXE: CALL OUTZEI       ;Zeichen in C ausgeben
-  0392    D6 30                         SUB  '0'
-  0394    C9                            RET
+  0372    CD 010C               INHEX:  CALL INZEI        ;Zeicheneingabe --> A
+  0375    4F                            LD   C,A
+  0376    FE 03                         CP   03H          ;Abbruch?
+  0378    CA 0396                       JP   Z,ABRUCH
+  037B    FE 30                         CP   '0'          ;kleiner als "0"?
+  037D    38 F3                         JR   C,INHEX
+  037F    FE 3A                         CP   '9'+1        ;kleiner als "9"?
+  0381    38 0D                         JR   C,INHEXE
+  0383    E6 5F                         AND  5FH          ;Kleinbuchstaben --> Grossb.
+  0385    FE 41                         CP   'A'          ;kleiner als "A"?
+  0387    38 E9                         JR   C,INHEX
+  0389    FE 47                         CP   'F'+1        ;groesser als "F"?
+  038B    30 E5                         JR   NC,INHEX
+  038D    4F                            LD   C,A
+  038E    D6 07                         SUB  7
+  0390    CD 0110               INHEXE: CALL OUTZEI       ;Zeichen in C ausgeben
+  0393    D6 30                         SUB  '0'
+  0395    C9                            RET
                                 ;
-  0395    21 0273               ABRUCH: LD   HL,BRKTXT    ;Anzeige: Abbruch!
-  0398    CD 0118                       CALL OUTTXT
-  039B    18 C9                         JR   FINIS
+  0396    21 0273               ABRUCH: LD   HL,BRKTXT    ;Anzeige: Abbruch!
+  0399    CD 0118                       CALL OUTTXT
+  039C    18 C9                         JR   FINIS
                                 ;
                                 ; Interrupt-Serviceroutine
                                 ; ========================
                                 ;
-  039D    F3                    ISRCTC: DI                ;Interruptentry
-  039E    21 0000                       LD   HL,0
-  03A1    16 05                         LD   D,5
-  03A3    CD 0110                       CALL OUTZEI       ;Zeichen in C ausgeben
-  03A6    0C                            INC  C
-  03A7    05                            DEC  B
-  03A8    79                            LD   A,C
-  03A9    FE 7F                         CP   7FH
-  03AB    20 02                         JR   NZ,M3
-  03AD    0E 20                         LD   C,' '
-  03AF    FB                    M3:     EI
-  03B0    ED 4D                         RETI
+  039E    F3                    ISRCTC: DI                ;Interruptentry
+  039F    21 0000                       LD   HL,0
+  03A2    16 05                         LD   D,5
+  03A4    CD 0110                       CALL OUTZEI       ;Zeichen in C ausgeben
+  03A7    0C                            INC  C
+  03A8    05                            DEC  B
+  03A9    79                            LD   A,C
+  03AA    FE 7F                         CP   7FH
+  03AC    20 02                         JR   NZ,M3
+  03AE    0E 20                         LD   C,' '
+  03B0    FB                    M3:     EI
+  03B1    ED 4D                         RETI
                                 ;
-  03B2    66 69 6E 69                   DEFM "finis"
-  03B6    73                    
+  03B3    66 69 6E 69                   DEFM "finis"
+  03B7    73                    
                                 ;
                                         .DEPHASE
                                         END
@@ -460,24 +459,24 @@
 Macros:
 
 Symbols:
-0395 	ABRUCH          0129 	ANFTXT          0273 	BRKTXT          
+0396 	ABRUCH          0129 	ANFTXT          0273 	BRKTXT          
 E609 	CONIN           E60C 	CONOUT          E606 	CONST           
-0001 	CPM             0000 	CTC             029A 	CTCTXT          
-0366 	FINIS           07FD 	GETCO           0371 	INHEX           
-038F 	INHEXE          010C 	INZEI           039D 	ISRCTC          
-FF90 	IV              0262 	KORTXT          034A 	M1              
-0352 	M2              03AF 	M3              02C6 	NL1TXT          
-02C9 	NL2TXT          0369 	NOCTC           011A 	OUTTX1          
-0123 	OUTTX2          0126 	OUTTX3          0118 	OUTTXT          
-0115 	OUTZE1          0110 	OUTZEI          0108 	PATCH1          
-010C 	PATCH2          0112 	PATCH3          0120 	PATCH4          
-0284 	RDYTXT          02CE 	START           0108 	TASTE           
-010B 	TASTE1          0302 	TEST1           0316 	TEST2           
-0000 	WBOOT           
+0001 	CPM             029A 	CTCTXT          0367 	FINIS           
+07FD 	GETCO           0372 	INHEX           0390 	INHEXE          
+010C 	INZEI           039E 	ISRCTC          FF90 	IV              
+0262 	KORTXT          034B 	M1              0353 	M2              
+03B0 	M3              02C6 	NL1TXT          02C9 	NL2TXT          
+036A 	NOCTC           011A 	OUTTX1          0123 	OUTTX2          
+0126 	OUTTX3          0118 	OUTTXT          0115 	OUTZE1          
+0110 	OUTZEI          0108 	PATCH1          010C 	PATCH2          
+0112 	PATCH3          0120 	PATCH4          0284 	RDYTXT          
+02CE 	START           0108 	TASTE           010B 	TASTE1          
+0302 	TEST1           0316 	TEST2           0000 	WBOOT           
 
 
 
 No Fatal error(s)
 
 
-    03AF 	M3      
+    
+03B0 	M3              02C6

@@ -3,14 +3,20 @@
 
                                 ; ***************************************************
                                 ; *                                                 *
-                                ; *  CTC-Testprogramm       Version vom 16.11.2026  *
+                                ; *  CTC-Testprogramm       Version vom 18.11.2026  *
+                                ; *  ================               von Frieder     *
                                 ; *                                                 *
                                 ; ***************************************************
                                 ;
-                                ; Dokumentation:
-                                ; - Test der Interruptfunktion der CTC
+                                ; Kurz-Dokumentation:
+                                ; - 4 Tests der Interruptfunktion der CTC
                                 ; - Kanal 0 und 1 der CTC sind verbunden
                                 ; - Interrupt alle 20 Millisekunden
+                                ; - funktioniert mit dem AC1-Monitor und unter CP/M
+                                ;
+                                ; Assemblieren des Quelltextes unter CP/M:
+                                ; M80 = CTCTEST
+                                ; LINKMT CTCTEST
                                 ;
                                 ; ***************************************************
                                 ; *  Wichtig: Fuer das AC1-Programm muss die        *
@@ -41,7 +47,7 @@
                                         IFDEF CPM
                                         .PHASE 100H       ;CP/M-Programm startet bei 100H
                                         ELSE
-                                        .PHASE 4000H      ;AC1-Programm startet bei 4000H
+                                        .PHASE 2000H      ;AC1-Programm startet bei 2000H
                                         ENDIF
                                 ;
   0000                          WBOOT   EQU  00000H       ;Warmstart
@@ -51,7 +57,7 @@
                                 ;
   07FD                          GETCO   EQU  07FDH        ;AC1-Monitor - Eingabeschleife
                                 ;
-  0100    C3 02CE                       JP   START
+  0100    C3 03D7                       JP   START
   0103                                  DEFS 5,0
                                 ;
                                 ;
@@ -60,7 +66,7 @@
                                         IFDEF CPM
   FF90                          IV      EQU  0FF90H       ;USER-Interruptvektoren
                                         ELSE
-                                IV:     DEFS 8,0          ;im AC1-Monitor Adr. 4008H
+                                IV:     DEFS 8,0          ;im AC1-Monitor Adr. 2008H
                                         ENDIF
                                 ;
                                 ; UP Taste gedrueckt?
@@ -104,182 +110,274 @@
                                 ;
   0110    F5                    OUTZEI: PUSH AF
   0111    C5                            PUSH BC
+  0112    D5                            PUSH DE           ;wg. CONOUT im HRCPM12!
                                         IFDEF CPM
-  0112    CD E60C               PATCH3: CALL CONOUT       ;CP/M: CONOUT
+  0113    CD E60C               PATCH3: CALL CONOUT       ;CP/M: CONOUT
                                         ELSE
                                         LD  A,C
                                         CP  0AH           ;AC1: 0AH nicht ausgeben
                                         JR  Z,OUTZE1
                                         RST 10H           ;AC1: RST 10H
                                         ENDIF
-  0115    C1                    OUTZE1: POP  BC
-  0116    F1                            POP  AF
-  0117    C9                            RET
+  0116    D1                    OUTZE1: POP  DE
+  0117    C1                            POP  BC
+  0118    F1                            POP  AF
+  0119    C9                            RET
                                 ;
                                 ; UP Textausgabe
                                 ; ==============
                                 ;
-  0118    F5                    OUTTXT: PUSH AF
-  0119    C5                            PUSH BC
-  011A    7E                    OUTTX1: LD   A,(HL)
-  011B    FE 00                         CP   0            ;Ende
-  011D    28 07                         JR   Z,OUTTX3
+  011A    F5                    OUTTXT: PUSH AF
+  011B    C5                            PUSH BC
+  011C    D5                            PUSH DE           ;wg. CONOUT im HRCPM12!
+  011D    7E                    OUTTX1: LD   A,(HL)
+  011E    FE 00                         CP   0            ;Ende
+  0120    28 07                         JR   Z,OUTTX3
                                         IFDEF CPM
-  011F    4F                            LD   C,A
-  0120    CD E60C               PATCH4: CALL CONOUT       ;CP/M: CONOUT
+  0122    4F                            LD   C,A
+  0123    CD E60C               PATCH4: CALL CONOUT       ;CP/M: CONOUT
                                         ELSE
                                         CP  0AH           ;0AH nicht ausgeben
                                         JR  Z,OUTTX2
                                         RST 10H           ;AC1: RST 10H
                                         ENDIF
-  0123    23                    OUTTX2: INC  HL
-  0124    18 F4                         JR   OUTTX1
-  0126    C1                    OUTTX3: POP  BC
-  0127    F1                            POP  AF
-  0128    C9                            RET
+  0126    23                    OUTTX2: INC  HL
+  0127    18 F4                         JR   OUTTX1
+  0129    D1                    OUTTX3: POP  DE
+  012A    C1                            POP  BC
+  012B    F1                            POP  AF
+  012C    C9                            RET
+                                ;
+                                ; UP Eingabe einer HEX-Ziffer
+                                ; ===========================
+	MACRO-80 3.44	09-Dec-81	PAGE	1-3
+
+
+                                ;
+  012D    CD 010C               INHEX:  CALL INZEI        ;Zeicheneingabe --> A
+  0130    4F                            LD   C,A
+  0131    FE 30                         CP   '0'          ;kleiner als "0"?
+  0133    38 F8                         JR   C,INHEX
+  0135    FE 3A                         CP   '9'+1        ;kleiner als "9"?
+  0137    38 0D                         JR   C,INHEXE
+  0139    E6 5F                         AND  5FH          ;Kleinbuchstaben --> Grossb.
+  013B    FE 41                         CP   'A'          ;kleiner als "A"?
+  013D    38 EE                         JR   C,INHEX
+  013F    FE 47                         CP   'F'+1        ;groesser als "F"?
+  0141    30 EA                         JR   NC,INHEX
+  0143    4F                            LD   C,A          ;ASCII-Zeichen steht in C
+  0144    D6 07                         SUB  7
+  0146    D6 30                 INHEXE: SUB  '0'          ;HEX-Code steht in A
+  0148    C9                            RET
                                 ;
                                 ; Bildschirmausschriften
                                 ; ======================
                                 ;
-  0129    0D 0A 0D 0A           ANFTXT: DEFB 0DH,0AH,0DH,0AH
-  012D    43 54 43 2D                   DEFM "CTC-Testprogramm"
-  0131    54 65 73 74           
-	MACRO-80 3.44	09-Dec-81	PAGE	1-3
-
-
-  0135    70 72 6F 67           
-  0139    72 61 6D 6D           
-  013D    0D 0A                         DEFB 0DH,0AH
-  013F    2D 2D 2D 2D                   DEFM "----------------"
-  0143    2D 2D 2D 2D           
-  0147    2D 2D 2D 2D           
-  014B    2D 2D 2D 2D           
-  014F    0D 0A 0D 0A                   DEFB 0DH,0AH,0DH,0AH
-  0153    2D 20 54 65                   DEFM "- Test der Interruptfunktion der CTC"
-  0157    73 74 20 64           
-  015B    65 72 20 49           
-  015F    6E 74 65 72           
-  0163    72 75 70 74           
-  0167    66 75 6E 6B           
-  016B    74 69 6F 6E           
-  016F    20 64 65 72           
-  0173    20 43 54 43           
-  0177    0D 0A                         DEFB 0DH,0AH
-  0179    2D 20 4E 75                   DEFM "- Nutzung des CPU-Taktes fuer Kanal 0"
-  017D    74 7A 75 6E           
-  0181    67 20 64 65           
-  0185    73 20 43 50           
-  0189    55 2D 54 61           
-  018D    6B 74 65 73           
-  0191    20 66 75 65           
-  0195    72 20 4B 61           
-  0199    6E 61 6C 20           
-  019D    30                    
-  019E    0D 0A                         DEFB 0DH,0AH
-  01A0    2D 20 4B 61                   DEFM "- Kanal 0 und 1 der CTC sind verbunden"
-  01A4    6E 61 6C 20           
-  01A8    30 20 75 6E           
-  01AC    64 20 31 20           
-  01B0    64 65 72 20           
-  01B4    43 54 43 20           
-  01B8    73 69 6E 64           
-  01BC    20 76 65 72           
-  01C0    62 75 6E 64           
-  01C4    65 6E                 
-  01C6    0D 0A                         DEFB 0DH,0AH
-  01C8    2D 20 49 6E                   DEFM "- Interrupt alle 20 Millisekunden"
-  01CC    74 65 72 72           
-  01D0    75 70 74 20           
-  01D4    61 6C 6C 65           
-  01D8    20 32 30 20           
-  01DC    4D 69 6C 6C           
-  01E0    69 73 65 6B           
-  01E4    75 6E 64 65           
-  01E8    6E                    
-  01E9    0D 0A                         DEFB 0DH,0AH
-  01EB    2D 20 41 43                   DEFM "- AC1 System-CTC hat die I/O-Adresse: 00"
-  01EF    31 20 53 79           
-  01F3    73 74 65 6D           
-  01F7    2D 43 54 43           
-  01FB    20 68 61 74           
-  01FF    20 64 69 65           
-  0203    20 49 2F 4F           
-  0207    2D 41 64 72           
-  020B    65 73 73 65           
-  020F    3A 20 30 30           
+  0149    0D 0A 0D 0A           ANFTXT: DEFB 0DH,0AH,0DH,0AH
+  014D    43 54 43 2D                   DEFM "CTC-Testprogramm"
+  0151    54 65 73 74           
+  0155    70 72 6F 67           
+  0159    72 61 6D 6D           
+  015D    0D 0A                         DEFB 0DH,0AH
+  015F    2D 2D 2D 2D                   DEFM "----------------"
+  0163    2D 2D 2D 2D           
+  0167    2D 2D 2D 2D           
+  016B    2D 2D 2D 2D           
+  016F    0D 0A 0D 0A                   DEFB 0DH,0AH,0DH,0AH
+  0173    2A 20 54 65                   DEFM "* Test der Interruptfunktion der CTC Kanal 0"
+  0177    73 74 20 64           
+  017B    65 72 20 49           
+  017F    6E 74 65 72           
+  0183    72 75 70 74           
+  0187    66 75 6E 6B           
+  018B    74 69 6F 6E           
+  018F    20 64 65 72           
+  0193    20 43 54 43           
+  0197    20 4B 61 6E           
+  019B    61 6C 20 30           
+  019F    0D 0A                         DEFB 0DH,0AH
+  01A1    2A 20 54 65                   DEFM "* Test der Interruptfunktion der CTC Kanal 1"
+  01A5    73 74 20 64           
+  01A9    65 72 20 49           
+  01AD    6E 74 65 72           
+  01B1    72 75 70 74           
+  01B5    66 75 6E 6B           
+  01B9    74 69 6F 6E           
+  01BD    20 64 65 72           
+  01C1    20 43 54 43           
+  01C5    20 4B 61 6E           
+  01C9    61 6C 20 31           
+  01CD    0D 0A                         DEFB 0DH,0AH
+  01CF    2A 20 54 65                   DEFM "* Test, ob K0 und K1 der CTC verbunden sind"
+  01D3    73 74 2C 20           
+  01D7    6F 62 20 4B           
+  01DB    30 20 75 6E           
+  01DF    64 20 4B 31           
 	MACRO-80 3.44	09-Dec-81	PAGE	1-4
 
 
-  0213    0D 0A                         DEFB 0DH,0AH
-  0215    2D 20 49 2F                   DEFM "- I/O-Adresse der AC1 Soundkarte-CTC: 3C"
-  0219    4F 2D 41 64           
-  021D    72 65 73 73           
-  0221    65 20 64 65           
-  0225    72 20 41 43           
-  0229    31 20 53 6F           
-  022D    75 6E 64 6B           
-  0231    61 72 74 65           
-  0235    2D 43 54 43           
-  0239    3A 20 33 43           
-  023D    0D 0A 0D 0A                   DEFB 0DH,0AH,0DH,0AH
-  0241    45 69 6E 67                   DEFM "Eingabe der I/O-Adresse (hex) = "
-  0245    61 62 65 20           
-  0249    64 65 72 20           
-  024D    49 2F 4F 2D           
-  0251    41 64 72 65           
-  0255    73 73 65 20           
-  0259    28 68 65 78           
-  025D    29 20 3D 20           
-  0261    00                            DEFB 00H
+  01E3    20 64 65 72           
+  01E7    20 43 54 43           
+  01EB    20 76 65 72           
+  01EF    62 75 6E 64           
+  01F3    65 6E 20 73           
+  01F7    69 6E 64              
+  01FA    0D 0A                         DEFB 0DH,0AH
+  01FC    2A 20 54 65                   DEFM "* Test, ob ein Quarz an K0 angeschlossen ist"
+  0200    73 74 2C 20           
+  0204    6F 62 20 65           
+  0208    69 6E 20 51           
+  020C    75 61 72 7A           
+  0210    20 61 6E 20           
+  0214    4B 30 20 61           
+  0218    6E 67 65 73           
+  021C    63 68 6C 6F           
+  0220    73 73 65 6E           
+  0224    20 69 73 74           
+  0228    0D 0A 0D 0A                   DEFB 0DH,0AH,0DH,0AH
+  022C    2D 2D 3E 20                   DEFM "--> AC1 System-CTC hat die I/O-Adresse: 00"
+  0230    41 43 31 20           
+  0234    53 79 73 74           
+  0238    65 6D 2D 43           
+  023C    54 43 20 68           
+  0240    61 74 20 64           
+  0244    69 65 20 49           
+  0248    2F 4F 2D 41           
+  024C    64 72 65 73           
+  0250    73 65 3A 20           
+  0254    30 30                 
+  0256    0D 0A                         DEFB 0DH,0AH
+  0258    2D 2D 3E 20                   DEFM "--> I/O-Adresse der AC1 Soundkarte-CTC: 3C"
+  025C    49 2F 4F 2D           
+  0260    41 64 72 65           
+  0264    73 73 65 20           
+  0268    64 65 72 20           
+  026C    41 43 31 20           
+  0270    53 6F 75 6E           
+  0274    64 6B 61 72           
+  0278    74 65 2D 43           
+  027C    54 43 3A 20           
+  0280    33 43                 
+  0282    0D 0A 0D 0A                   DEFB 0DH,0AH,0DH,0AH
+  0286    45 69 6E 67                   DEFM "Eingabe der I/O-Adresse (hex) = "
+  028A    61 62 65 20           
+  028E    64 65 72 20           
+  0292    49 2F 4F 2D           
+  0296    41 64 72 65           
+  029A    73 73 65 20           
+  029E    28 68 65 78           
+  02A2    29 20 3D 20           
+  02A6    00                            DEFB 00H
                                 ;
-  0262    20 2D 2D 3E           KORTXT: DEFM " --> Korrektur: "
-  0266    20 4B 6F 72           
-  026A    72 65 6B 74           
-  026E    75 72 3A 20           
-  0272    00                            DEFB 00H
+  02A7    20 2D 2D 3E           KORTXT: DEFM " --> Korrektur: "
+  02AB    20 4B 6F 72           
+  02AF    72 65 6B 74           
+  02B3    75 72 3A 20           
+  02B7    00                            DEFB 00H
                                 ;
-  0273    0D 0A 0D 0A           BRKTXT: DEFB 0DH,0AH,0DH,0AH
-  0277    41 62 62 72                   DEFM "Abbruch!"
-  027B    75 63 68 21           
-  027F    0D 0A 0D 0A                   DEFB 0DH,0AH,0DH,0AH,00H
-  0283    00                    
-                                ;
-  0284    0D 0A 0D 0A           RDYTXT: DEFB 0DH,0AH,0DH,0AH
-  0288    46 75 6E 6B                   DEFM "Funktioniert!"
-  028C    74 69 6F 6E           
-  0290    69 65 72 74           
-  0294    21                    
-  0295    0D 0A 0D 0A                   DEFB 0DH,0AH,0DH,0AH,00H
-  0299    00                    
-                                ;
-  029A    0D 0A                 CTCTXT: DEFB 0DH,0AH
-  029C    46 65 68 6C                   DEFM "Fehler: keine CTC auf dieser Adresse!"
-  02A0    65 72 3A 20           
-  02A4    6B 65 69 6E           
-  02A8    65 20 43 54           
-  02AC    43 20 61 75           
-  02B0    66 20 64 69           
-  02B4    65 73 65 72           
-  02B8    20 41 64 72           
-  02BC    65 73 73 65           
-  02C0    21                    
-  02C1    0D 0A 0D 0A                   DEFB 0DH,0AH,0DH,0AH,00H
-  02C5    00                    
-                                ;
-  02C6    0D 0A 00              NL1TXT: DEFB 0DH,0AH,00H
-                                ;
-  02C9    0D 0A 0D 0A           NL2TXT: DEFB 0DH,0AH,0DH,0AH,00H
-  02CD    00                    
+  02B8    0D 0A 0D 0A           RDYTXT: DEFB 0DH,0AH,0DH,0AH
 	MACRO-80 3.44	09-Dec-81	PAGE	1-5
 
 
+  02BC    2D 2D 3E 20                   DEFM "--> CTC funktioniert!"
+  02C0    43 54 43 20           
+  02C4    66 75 6E 6B           
+  02C8    74 69 6F 6E           
+  02CC    69 65 72 74           
+  02D0    21                    
+  02D1    0D 0A 0D 0A                   DEFB 0DH,0AH,0DH,0AH,00H
+  02D5    00                    
+                                ;
+  02D6    41 62 62 72           BRK1TX: DEFM "Abbruch: keine CTC erkannt!"
+  02DA    75 63 68 3A           
+  02DE    20 6B 65 69           
+  02E2    6E 65 20 43           
+  02E6    54 43 20 65           
+  02EA    72 6B 61 6E           
+  02EE    6E 74 21              
+  02F1    0D 0A 0D 0A                   DEFB 0DH,0AH,0DH,0AH,00H
+  02F5    00                    
+                                ;
+  02F6    41 62 62 72           BRK2TX: DEFM "Abbruch: K0 und K1 sind nicht verbunden!"
+  02FA    75 63 68 3A           
+  02FE    20 4B 30 20           
+  0302    75 6E 64 20           
+  0306    4B 31 20 73           
+  030A    69 6E 64 20           
+  030E    6E 69 63 68           
+  0312    74 20 76 65           
+  0316    72 62 75 6E           
+  031A    64 65 6E 21           
+  031E    0D 0A 0D 0A                   DEFB 0DH,0AH,0DH,0AH,00H
+  0322    00                    
+                                ;
+  0323    41 62 62 72           BRK3TX: DEFM "Abbruch: kein Quarz an K0 angeschlossen!"
+  0327    75 63 68 3A           
+  032B    20 6B 65 69           
+  032F    6E 20 51 75           
+  0333    61 72 7A 20           
+  0337    61 6E 20 4B           
+  033B    30 20 61 6E           
+  033F    67 65 73 63           
+  0343    68 6C 6F 73           
+  0347    73 65 6E 21           
+  034B    0D 0A 0D 0A                   DEFB 0DH,0AH,0DH,0AH,00H
+  034F    00                    
+                                ;
+  0350    0D 0A 0D 0A           K0TXT:  DEFB 0DH,0AH,0DH,0AH
+  0354    49 6E 74 65                   DEFM "Interrupttest K0:"
+  0358    72 72 75 70           
+  035C    74 74 65 73           
+  0360    74 20 4B 30           
+  0364    3A                    
+  0365    0D 0A 00                      DEFB 0DH,0AH,00H
+                                ;
+  0368    0D 0A 0D 0A           K1TXT:  DEFB 0DH,0AH,0DH,0AH
+  036C    49 6E 74 65                   DEFM "Interrupttest K1:"
+  0370    72 72 75 70           
+  0374    74 74 65 73           
+  0378    74 20 4B 31           
+  037C    3A                    
+  037D    0D 0A 00                      DEFB 0DH,0AH,00H
+	MACRO-80 3.44	09-Dec-81	PAGE	1-6
+
+
+                                ;
+  0380    0D 0A 0D 0A           K01TXT: DEFB 0DH,0AH,0DH,0AH
+  0384    49 6E 74 65                   DEFM "Interrupttest K0 + K1:"
+  0388    72 72 75 70           
+  038C    74 74 65 73           
+  0390    74 20 4B 30           
+  0394    20 2B 20 4B           
+  0398    31 3A                 
+  039A    0D 0A 00                      DEFB 0DH,0AH,00H
+                                ;
+  039D    0D 0A 0D 0A           Q01TXT: DEFB 0DH,0AH,0DH,0AH
+  03A1    49 6E 74 65                   DEFM "Interrupttest mit Quarz an K0 + K1:"
+  03A5    72 72 75 70           
+  03A9    74 74 65 73           
+  03AD    74 20 6D 69           
+  03B1    74 20 51 75           
+  03B5    61 72 7A 20           
+  03B9    61 6E 20 4B           
+  03BD    30 20 2B 20           
+  03C1    4B 31 3A              
+  03C4    0D 0A 00                      DEFB 0DH,0AH,00H
+                                ;
+                                ; CTC-Programmierung
+                                ; ==================
+                                ;
+  03C7    A7 9D 03 03           CTCK0:  DEFB 0A7H,157,3,3
+  03CB    03 03 A7 9D           CTCK1:  DEFB 3,3,0A7H,157
+  03CF    27 04 C7 27           CTCK01: DEFB 27H,4,0C7H,39
+  03D3    47 9D C7 39           CTCQ01: DEFB 47H,157,0C7H,57
                                 ;
                                 ; Programmstart
                                 ; =============
                                 ;
-  02CE                          START:
+  03D7                          START:
                                         IFDEF CPM
-  02CE    31 0100                       LD   SP,0100H     ;CP/M - Stack
+  03D7    31 0100                       LD   SP,0100H     ;CP/M - Stack
                                         ELSE
                                         DEFB 00H,09H,78H,0DH   ;Kennbuchstabe 'x'
                                         LD   SP,1856H     ;AC1 - Stack
@@ -289,167 +387,240 @@
                                 ; ==================================
                                 ;
                                         IFDEF CPM
-  02D1    3A 0002                       LD   A,(WBOOT+2)  ;HWT Adresse WBOOT lesen
-  02D4    32 010A                       LD   (PATCH1+2),A ;HWT Adresse CONST
-  02D7    32 010E                       LD   (PATCH2+2),A ;HWT Adresse CONIN
-  02DA    32 0114                       LD   (PATCH3+2),A ;HWT Adresse CONOUT
-  02DD    32 0122                       LD   (PATCH4+2),A ;HWT Adresse CONOUT
+  03DA    3A 0002                       LD   A,(WBOOT+2)  ;HWT Adresse WBOOT lesen
+  03DD    32 010A                       LD   (PATCH1+2),A ;HWT Adresse CONST
+  03E0    32 010E                       LD   (PATCH2+2),A ;HWT Adresse CONIN
+  03E3    32 0115                       LD   (PATCH3+2),A ;HWT Adresse CONOUT
+  03E6    32 0125                       LD   (PATCH4+2),A ;HWT Adresse CONOUT
                                         ENDIF
                                 ;
                                 ; Anfangstext und Kanalauswahl
                                 ; ============================
                                 ;
-  02E0    21 0129                       LD   HL,ANFTXT    ;Anfangstext
-  02E3    CD 0118                       CALL OUTTXT
-  02E6    CD 0372                       CALL INHEX        ;1. HEX-Wert
-  02E9    61                            LD   H,C
-  02EA    E6 0F                         AND  0FH          ;Maske: 0..F
-  02EC    07                            RLCA
-  02ED    07                            RLCA
-  02EE    07                            RLCA
-  02EF    07                            RLCA
-  02F0    57                            LD   D,A
-  02F1    CD 0372                       CALL INHEX        ;2. HEX-Wert
-  02F4    E6 0C                         AND  0CH          ;Maske: 0,4,8,C
-  02F6    B2                            OR   D
-  02F7    5F                            LD   E,A          ;unteres I/O-Adressbyte
+  03E9    21 0149                       LD   HL,ANFTXT    ;Anfangstext
+  03EC    CD 011A                       CALL OUTTXT
+  03EF    CD 012D                       CALL INHEX        ;1. HEX-Wert
+  03F2    CD 0110                       CALL OUTZEI
+  03F5    61                            LD   H,C
+	MACRO-80 3.44	09-Dec-81	PAGE	1-7
+
+
+  03F6    E6 0F                         AND  0FH          ;Maske: 0..F
+  03F8    07                            RLCA
+  03F9    07                            RLCA
+  03FA    07                            RLCA
+  03FB    07                            RLCA
+  03FC    57                            LD   D,A
+  03FD    CD 012D                       CALL INHEX        ;2. HEX-Wert
+  0400    CD 0110                       CALL OUTZEI
+  0403    E6 0C                         AND  0CH          ;Maske: 0,4,8,C
+  0405    B2                            OR   D
+  0406    5F                            LD   E,A          ;E --> unteres I/O-Adressbyte
                                 ;
                                 ; Test der Eingabe
                                 ; ================
                                 ;
-  02F8    E6 0C                         AND  0CH          ;Test unteres Adressbyte
-  02FA    F6 30                         OR   '0'
-  02FC    FE 3C                         CP   3CH
-  02FE    20 02                         JR   NZ,TEST1
-  0300    C6 07                         ADD  A,7          ;3C --> 'C'
-  0302    6F                    TEST1:  LD   L,A
-  0303    B9                            CP   C
-  0304    28 10                         JR   Z,TEST2
-  0306    E5                            PUSH HL
-  0307    21 0262                       LD   HL,KORTXT    ;--> Korrektur:
-  030A    CD 0118                       CALL OUTTXT
-  030D    E1                            POP  HL
-  030E    4C                            LD   C,H
-  030F    CD 0110                       CALL OUTZEI
-  0312    4D                            LD   C,L
-  0313    CD 0110                       CALL OUTZEI
-	MACRO-80 3.44	09-Dec-81	PAGE	1-6
+  0407    E6 0C                         AND  0CH          ;Test unteres Adressbyte
+  0409    F6 30                         OR   '0'
+  040B    FE 3C                         CP   3CH
+  040D    20 02                         JR   NZ,TEST1
+  040F    C6 07                         ADD  A,7          ;3CH --> 'C'
+  0411    6F                    TEST1:  LD   L,A
+  0412    B9                            CP   C
+  0413    28 10                         JR   Z,ISRINI     ;Eingabe o.k.
+  0415    E5                            PUSH HL
+  0416    21 02A7                       LD   HL,KORTXT    ;--> Korrektur:
+  0419    CD 011A                       CALL OUTTXT
+  041C    E1                            POP  HL
+  041D    4C                            LD   C,H
+  041E    CD 0110                       CALL OUTZEI
+  0421    4D                            LD   C,L
+  0422    CD 0110                       CALL OUTZEI
+                                ;
+                                ; ISR-Init. + CTC-Reset
+                                ; =====================
+                                ;
+  0425    F3                    ISRINI: DI
+  0426    21 0502                       LD   HL,ISRCTC    ;Einsprungpunkt ISR
+  0429    22 FF90                       LD   (IV),HL
+  042C    22 FF92                       LD   (IV+2),HL
+  042F    3E FF                         LD   A,HIGH(IV)   ;Int.-vektor HWT
+  0431    ED 47                         LD   I,A
+  0433    06 00                         LD   B,0          ;oberes I/O-Adressbyte
+  0435    4B                            LD   C,E          ;unteres I/O-Adressbyte
+  0436    3E 03                         LD   A,3          ;CTC-Reset
+  0438    ED 79                         OUT  (C),A
+  043A    0C                    NEXT:   INC  C            ;I/O-Adresse++
+  043B    ED 79                         OUT  (C),A
+  043D    0C                            INC  C
+  043E    ED 79                         OUT  (C),A
+  0440    0C                            INC  C
+  0441    ED 79                         OUT  (C),A        ;Komplett-Reset wg. HRCPM12!
+                                ;
+                                ; Testroutinen und Finis
+                                ; ======================
+                                ;
+  0443    21 0350                       LD   HL,K0TXT     ;Kanal 1
+  0446    CD 011A                       CALL OUTTXT
+  0449    DD 21 03C7                    LD   IX,CTCK0
+  044D    CD 04A4                       CALL CTCINI
+  0450    B7                            OR   A
+	MACRO-80 3.44	09-Dec-81	PAGE	1-8
 
 
-  0316    21 02C9               TEST2:  LD   HL,NL2TXT
-  0319    CD 0118                       CALL OUTTXT
+  0451    20 38                         JR   NZ,BREAK1
+                                ;
+  0453    21 0368                       LD   HL,K1TXT     ;Kanal 2
+  0456    CD 011A                       CALL OUTTXT
+  0459    DD 21 03CB                    LD   IX,CTCK1
+  045D    CD 04A4                       CALL CTCINI
+  0460    B7                            OR   A
+  0461    20 28                         JR   NZ,BREAK1
+                                ;
+  0463    21 0380                       LD   HL,K01TXT    ;Kanal 1 + Kanal 2
+  0466    CD 011A                       CALL OUTTXT
+  0469    DD 21 03CF                    LD   IX,CTCK01
+  046D    CD 04A4                       CALL CTCINI
+  0470    B7                            OR   A
+  0471    20 20                         JR   NZ,BREAK2
+                                ;
+  0473    21 039D                       LD   HL,Q01TXT    ;Quarz an K0 + K1
+  0476    CD 011A                       CALL OUTTXT
+  0479    DD 21 03D3                    LD   IX,CTCQ01
+  047D    CD 04A4                       CALL CTCINI
+  0480    B7                            OR   A
+  0481    20 18                         JR   NZ,BREAK3
+                                ;
+  0483    21 02B8                       LD   HL,RDYTXT    ;CTC funktioniert!
+  0486    CD 011A                       CALL OUTTXT
+  0489    18 16                         JR   FINIS
+                                ;
+  048B    21 02D6               BREAK1: LD   HL,BRK1TX    ;Abbruch: keine CTC erkannt!
+  048E    CD 011A                       CALL OUTTXT
+  0491    18 0E                         JR   FINIS
+                                ;
+  0493    21 02F6               BREAK2: LD   HL,BRK2TX    ;Abbruch: K0 und K1 sind nicht verbunden!
+  0496    CD 011A                       CALL OUTTXT
+  0499    18 06                         JR   FINIS
+                                ;
+  049B    21 0323               BREAK3: LD   HL,BRK3TX    ;Abbruch: kein Quarz an K0 angeschlossen!
+  049E    CD 011A                       CALL OUTTXT
+                                ;
+  04A1                          FINIS:
+                                        IFDEF CPM
+  04A1    C3 0000                       JP   WBOOT        ;CP/M: WBOOT
+                                        ELSE
+                                        JP   GETCO        ;AC1-Monitor
+                                        ENDIF
                                 ;
                                 ; CTC - Initialisierung
                                 ; =====================
                                 ;
-  031C    F3                            DI
-  031D    21 039E                       LD   HL,ISRCTC    ;Einsprungpunkt CTC-Interrupt
-  0320    22 FF92                       LD   (IV+2),HL
-  0323    3E FF                         LD   A,HIGH(IV)   ;Int.-vektor HWT
-  0325    ED 47                         LD   I,A
-  0327    3E 90                         LD   A,LOW(IV)    ;Int.-vektor NWT --> 4008H
-  0329    06 00                         LD   B,0          ;oberes I/O-Adressbyte
-  032B    4B                            LD   C,E          ;unteres I/O-Adressbyte
-  032C    ED 79                         OUT  (C),A
-  032E    3E 27                         LD   A,27H        ;Kanalsteuerwort
-  0330    ED 79                         OUT  (C),A
-  0332    3E 04                         LD   A,4          ;Zeitkonstante
-  0334    ED 79                         OUT  (C),A
-  0336    0C                            INC  C            ;I/O-Adressbyte + 1
-  0337    3E C7                         LD   A,0C7H       ;Kanalsteuerwort
-  0339    ED 79                         OUT  (C),A
-  033B    3E 27                         LD   A,39         ;Zeitkonstante
-  033D    ED 79                         OUT  (C),A
-  033F    ED 5E                         IM   2
+  04A4    06 00                 CTCINI: LD   B,0          ;oberes I/O-Adressbyte
+  04A6    4B                            LD   C,E          ;unteres I/O-Adressbyte
+  04A7    3E 90                         LD   A,LOW(IV)    ;Int.-vektor NWT
+  04A9    ED 79                         OUT  (C),A
+  04AB    DD 7E 00                      LD   A,(IX)       ;Kanalsteuerwort K1
+  04AE    ED 79                         OUT  (C),A
+  04B0    DD 7E 01                      LD   A,(IX+1)     ;Zeitkonstante K1
+  04B3    ED 79                         OUT  (C),A
+  04B5    0C                            INC  C            ;I/O-Adresse++
+  04B6    DD 7E 02                      LD   A,(IX+2)     ;Kanalsteuerwort K2
+  04B9    ED 79                         OUT  (C),A
+  04BB    DD 7E 03                      LD   A,(IX+3)     ;Zeitkonstante K2
+	MACRO-80 3.44	09-Dec-81	PAGE	1-9
+
+
+  04BE    ED 79                         OUT  (C),A
+  04C0    ED 5E                         IM   2
                                 ;
                                 ; Interruptfreigabe und Loop
                                 ; ==========================
                                 ;
-                                
-  0341    FB                            EI
-  0342    0E 20                         LD   C,' '        ;1. Zeichen
-  0344    06 BF                         LD   B,191        ;Anzahl der Zeichen
-  0346    21 0000                       LD   HL,0
-  0349    16 05                         LD   D,5
-  034B    2B                    M1:     DEC  HL
-  034C    7C                            LD   A,H
-  034D    B5                            OR   L
-  034E    20 03                         JR   NZ,M2
-  0350    15                            DEC  D
-  0351    28 17                         JR   Z,NOCTC      ;keine CTC auf dieser Adresse!
-  0353    04                    M2:     INC  B
-  0354    05                            DEC  B
-  0355    20 F4                         JR   NZ,M1
+  04C2    06 3A                         LD   B,58         ;Anzahl der Zeichen
+  04C4    0E 41                         LD   C,'A'        ;1. Zeichen
+  04C6    16 05                         LD   D,5          ;Zaehler #2 fuer Abbruch
+  04C8    21 0000                       LD   HL,0         ;Zaehler #1 fuer Abbruch
+  04CB    ED 43 053E                    LD   (CHARBC),BC
+  04CF    ED 53 0540                    LD   (CNTRDE),DE
+  04D3    22 0542                       LD   (CNTRHL),HL
+  04D6    FB                            EI
                                 ;
-                                ; Programmende
-                                ; ============
+  04D7    2A 0542               LOOP1:  LD   HL,(CNTRHL)  ;Loop: Warten auf Interrupts
+  04DA    2B                            DEC  HL
+  04DB    7C                            LD   A,H
+  04DC    B5                            OR   L
+  04DD    20 0C                         JR   NZ,LOOP2
+  04DF    ED 5B 0540                    LD   DE,(CNTRDE)
+  04E3    15                            DEC  D
+  04E4    3E 01                         LD   A,1
+  04E6    C8                            RET  Z            ;Abbruch: keine CTC erkannt!
+  04E7    ED 53 0540                    LD   (CNTRDE),DE
+  04EB    22 0542               LOOP2:  LD   (CNTRHL),HL
+  04EE    ED 4B 053E                    LD   BC,(CHARBC)
+  04F2    04                            INC  B
+  04F3    05                            DEC  B 
+  04F4    20 E1                         JR   NZ,LOOP1
                                 ;
-  0357    3E 03                         LD   A,03H        ;Kanalsteuerwort - Reset
-  0359    06 00                         LD   B,0          ;oberes I/O-Adressbyte
-  035B    4B                            LD   C,E          ;unteres I/O-Adressbyte
-  035C    ED 79                         OUT  (C),A
-  035E    0C                            INC  C            ;I/O-Adressbyte + 1
-  035F    ED 79                         OUT  (C),A
-  0361    21 0284                       LD   HL,RDYTXT    ;Funktioniert!
-  0364    CD 0118                       CALL OUTTXT
-  0367                          FINIS:
-                                        IFDEF CPM
-  0367    C3 0000                       JP   WBOOT        ;CP/M: WBOOT
-                                        ELSE
-	MACRO-80 3.44	09-Dec-81	PAGE	1-7
-
-
-                                        JP   GETCO        ;AC1: Eingabeschleife
-                                        ENDIF
+                                ; CTC-Reset K0 + K1
+                                ; =================
                                 ;
-  036A    21 029A               NOCTC:  LD   HL,CTCTXT    ;keine CTC auf dieser Adresse!
-  036D    CD 0118                       CALL OUTTXT
-  0370    18 F5                         JR   FINIS
-                                ;
-                                ; Eingabe und Ausgabe einer HEX-Ziffer (Erg. in A + C)
-                                ; ====================================
-                                ;
-  0372    CD 010C               INHEX:  CALL INZEI        ;Zeicheneingabe --> A
-  0375    4F                            LD   C,A
-  0376    FE 03                         CP   03H          ;Abbruch?
-  0378    CA 0396                       JP   Z,ABRUCH
-  037B    FE 30                         CP   '0'          ;kleiner als "0"?
-  037D    38 F3                         JR   C,INHEX
-  037F    FE 3A                         CP   '9'+1        ;kleiner als "9"?
-  0381    38 0D                         JR   C,INHEXE
-  0383    E6 5F                         AND  5FH          ;Kleinbuchstaben --> Grossb.
-  0385    FE 41                         CP   'A'          ;kleiner als "A"?
-  0387    38 E9                         JR   C,INHEX
-  0389    FE 47                         CP   'F'+1        ;groesser als "F"?
-  038B    30 E5                         JR   NC,INHEX
-  038D    4F                            LD   C,A
-  038E    D6 07                         SUB  7
-  0390    CD 0110               INHEXE: CALL OUTZEI       ;Zeichen in C ausgeben
-  0393    D6 30                         SUB  '0'
-  0395    C9                            RET
-                                ;
-  0396    21 0273               ABRUCH: LD   HL,BRKTXT    ;Anzeige: Abbruch!
-  0399    CD 0118                       CALL OUTTXT
-  039C    18 C9                         JR   FINIS
+  04F6    06 00                         LD   B,0          ;oberes I/O-Adressbyte
+  04F8    4B                            LD   C,E          ;unteres I/O-Adressbyte
+  04F9    3E 03                         LD   A,3          ;CTC-Reset
+  04FB    ED 79                         OUT  (C),A
+  04FD    0C                            INC  C            ;I/O-Adresse++
+  04FE    ED 79                         OUT  (C),A
+  0500    AF                            XOR  A
+  0501    C9                            RET               ;alle Zeichen ausgegeben
                                 ;
                                 ; Interrupt-Serviceroutine
                                 ; ========================
                                 ;
-  039E    F3                    ISRCTC: DI                ;Interruptentry
-  039F    21 0000                       LD   HL,0
-  03A2    16 05                         LD   D,5
-  03A4    CD 0110                       CALL OUTZEI       ;Zeichen in C ausgeben
-  03A7    0C                            INC  C
-  03A8    05                            DEC  B
-  03A9    79                            LD   A,C
-  03AA    FE 7F                         CP   7FH
-  03AC    20 02                         JR   NZ,M3
-  03AE    0E 20                         LD   C,' '
-  03B0    FB                    M3:     EI
-  03B1    ED 4D                         RETI
+  0502    ED 73 0544            ISRCTC: LD   (SAVSTK),SP  ;DI kann wegbleiben
+  0506    31 056C                       LD   SP,ISRSTK    ;eigener ISR-Stack
+  0509    FB                            EI
+  050A    F5                            PUSH AF
+  050B    C5                            PUSH BC
+  050C    D5                            PUSH DE
+  050D    E5                            PUSH HL
+  050E    ED 4B 053E                    LD   BC,(CHARBC)
+  0512    ED 5B 0540                    LD   DE,(CNTRDE)
+  0516    21 0000                       LD   HL,0         ;Zaehler #1 ruecksetzen
+  0519    16 05                         LD   D,5          ;Zaehler #2 ruecksetzen
+  051B    CD 0110                       CALL OUTZEI       ;Zeichen in C ausgeben
+  051E    0C                            INC  C
+  051F    05                            DEC  B
+	MACRO-80 3.44	09-Dec-81	PAGE	1-10
+
+
+  0520    79                            LD   A,C
+  0521    FE 7F                         CP   7FH
+  0523    20 02                         JR   NZ,ISR2
+  0525    0E 20                         LD   C,' '
+  0527    ED 43 053E            ISR2:   LD   (CHARBC),BC
+  052B    ED 53 0540                    LD   (CNTRDE),DE
+  052F    22 0542                       LD   (CNTRHL),HL
+  0532    E1                            POP  HL
+  0533    D1                            POP  DE
+  0534    C1                            POP  BC
+  0535    F1                            POP  AF
+  0536    F3                            DI
+  0537    ED 7B 0544                    LD   SP,(SAVSTK)
+  053B    FB                            EI
+  053C    ED 4D                         RETI
                                 ;
-  03B3    66 69 6E 69                   DEFM "finis"
-  03B7    73                    
+                                ; Speicherzellen
+                                ; ==============
+                                ;
+  053E    0000                  CHARBC: DEFW 0            ;Zeichenausgabe ISR + Counter
+  0540    0000                  CNTRDE: DEFW 0            ;Zaehler #2 fuer Abbruch + I/O Adr.
+  0542    0000                  CNTRHL: DEFW 0            ;Zaehler #1 fuer Abbruch
+  0544                          SAVSTK: DEFS 40,0         ;eigener ISR-Stack
+  056C                          ISRSTK:
+                                ;
+  056C    66 69 6E 69                   DEFM "finis"
+  0570    73                    
                                 ;
                                         .DEPHASE
                                         END
@@ -459,24 +630,28 @@
 Macros:
 
 Symbols:
-0396 	ABRUCH          0129 	ANFTXT          0273 	BRKTXT          
-E609 	CONIN           E60C 	CONOUT          E606 	CONST           
-0001 	CPM             029A 	CTCTXT          0367 	FINIS           
-07FD 	GETCO           0372 	INHEX           0390 	INHEXE          
-010C 	INZEI           039E 	ISRCTC          FF90 	IV              
-0262 	KORTXT          034B 	M1              0353 	M2              
-03B0 	M3              02C6 	NL1TXT          02C9 	NL2TXT          
-036A 	NOCTC           011A 	OUTTX1          0123 	OUTTX2          
-0126 	OUTTX3          0118 	OUTTXT          0115 	OUTZE1          
-0110 	OUTZEI          0108 	PATCH1          010C 	PATCH2          
-0112 	PATCH3          0120 	PATCH4          0284 	RDYTXT          
-02CE 	START           0108 	TASTE           010B 	TASTE1          
-0302 	TEST1           0316 	TEST2           0000 	WBOOT           
+0149 	ANFTXT          048B 	BREAK1          0493 	BREAK2          
+049B 	BREAK3          02D6 	BRK1TX          02F6 	BRK2TX          
+0323 	BRK3TX          053E 	CHARBC          0540 	CNTRDE          
+0542 	CNTRHL          E609 	CONIN           E60C 	CONOUT          
+E606 	CONST           0001 	CPM             04A4 	CTCINI          
+03C7 	CTCK0           03CF 	CTCK01          03CB 	CTCK1           
+03D3 	CTCQ01          04A1 	FINIS           07FD 	GETCO           
+012D 	INHEX           0146 	INHEXE          010C 	INZEI           
+0527 	ISR2            0502 	ISRCTC          0425 	ISRINI          
+056C 	ISRSTK          FF90 	IV              0380 	K01TXT          
+0350 	K0TXT           0368 	K1TXT           02A7 	KORTXT          
+04D7 	LOOP1           04EB 	LOOP2           043A 	NEXT            
+011D 	OUTTX1          0126 	OUTTX2          0129 	OUTTX3          
+011A 	OUTTXT          0116 	OUTZE1          0110 	OUTZEI          
+0108 	PATCH1          010C 	PATCH2          0113 	PATCH3          
+0123 	PATCH4          039D 	Q01TXT          02B8 	RDYTXT          
+0544 	SAVSTK          03D7 	START           0108 	TASTE           
+010B 	TASTE1          0411 	TEST1           0000 	WBOOT           
 
 
 
 No Fatal error(s)
 
 
-    
-03B0 	M3              02C6
+	

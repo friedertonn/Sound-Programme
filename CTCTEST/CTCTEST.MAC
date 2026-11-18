@@ -1,13 +1,19 @@
 ; ***************************************************
 ; *                                                 *
-; *  CTC-Testprogramm       Version vom 16.11.2026  *
+; *  CTC-Testprogramm       Version vom 18.11.2026  *
+; *  ================               von Frieder     *
 ; *                                                 *
 ; ***************************************************
 ;
-; Dokumentation:
-; - Test der Interruptfunktion der CTC
+; Kurz-Dokumentation:
+; - 4 Tests der Interruptfunktion der CTC
 ; - Kanal 0 und 1 der CTC sind verbunden
 ; - Interrupt alle 20 Millisekunden
+; - funktioniert mit dem AC1-Monitor und unter CP/M
+;
+; Assemblieren des Quelltextes unter CP/M:
+; M80 = CTCTEST
+; LINKMT CTCTEST
 ;
 ; ***************************************************
 ; *  Wichtig: Fuer das AC1-Programm muss die        *
@@ -34,7 +40,7 @@ CPM     EQU  1            ;CP/M-Version
         IFDEF CPM
         .PHASE 100H       ;CP/M-Programm startet bei 100H
         ELSE
-        .PHASE 4000H      ;AC1-Programm startet bei 4000H
+        .PHASE 2000H      ;AC1-Programm startet bei 2000H
         ENDIF
 ;
 WBOOT   EQU  00000H       ;Warmstart
@@ -53,7 +59,7 @@ GETCO   EQU  07FDH        ;AC1-Monitor - Eingabeschleife
         IFDEF CPM
 IV      EQU  0FF90H       ;USER-Interruptvektoren
         ELSE
-IV:     DEFS 8,0          ;im AC1-Monitor Adr. 4008H
+IV:     DEFS 8,0          ;im AC1-Monitor Adr. 2008H
         ENDIF
 ;
 ; UP Taste gedrueckt?
@@ -94,6 +100,7 @@ INZEI2: IN   A,(04H)      ;AC1: PIO1 Port A lesen
 ;
 OUTZEI: PUSH AF
         PUSH BC
+        PUSH DE           ;wg. CONOUT im HRCPM12!
         IFDEF CPM
 PATCH3: CALL CONOUT       ;CP/M: CONOUT
         ELSE
@@ -102,7 +109,8 @@ PATCH3: CALL CONOUT       ;CP/M: CONOUT
         JR  Z,OUTZE1
         RST 10H           ;AC1: RST 10H
         ENDIF
-OUTZE1: POP  BC
+OUTZE1: POP  DE
+        POP  BC
         POP  AF
         RET
 ;
@@ -111,6 +119,7 @@ OUTZE1: POP  BC
 ;
 OUTTXT: PUSH AF
         PUSH BC
+        PUSH DE           ;wg. CONOUT im HRCPM12!
 OUTTX1: LD   A,(HL)
         CP   0            ;Ende
         JR   Z,OUTTX3
@@ -124,8 +133,28 @@ PATCH4: CALL CONOUT       ;CP/M: CONOUT
         ENDIF
 OUTTX2: INC  HL
         JR   OUTTX1
-OUTTX3: POP  BC
+OUTTX3: POP  DE
+        POP  BC
         POP  AF
+        RET
+;
+; UP Eingabe einer HEX-Ziffer
+; ===========================
+;
+INHEX:  CALL INZEI        ;Zeicheneingabe --> A
+        LD   C,A
+        CP   '0'          ;kleiner als "0"?
+        JR   C,INHEX
+        CP   '9'+1        ;kleiner als "9"?
+        JR   C,INHEXE
+        AND  5FH          ;Kleinbuchstaben --> Grossb.
+        CP   'A'          ;kleiner als "A"?
+        JR   C,INHEX
+        CP   'F'+1        ;groesser als "F"?
+        JR   NC,INHEX
+        LD   C,A          ;ASCII-Zeichen steht in C
+        SUB  7
+INHEXE: SUB  '0'          ;HEX-Code steht in A
         RET
 ;
 ; Bildschirmausschriften
@@ -136,17 +165,17 @@ ANFTXT: DEFB 0DH,0AH,0DH,0AH
         DEFB 0DH,0AH
         DEFM "----------------"
         DEFB 0DH,0AH,0DH,0AH
-        DEFM "- Test der Interruptfunktion der CTC"
+        DEFM "* Test der Interruptfunktion der CTC Kanal 0"
         DEFB 0DH,0AH
-        DEFM "- Nutzung des CPU-Taktes fuer Kanal 0"
+        DEFM "* Test der Interruptfunktion der CTC Kanal 1"
         DEFB 0DH,0AH
-        DEFM "- Kanal 0 und 1 der CTC sind verbunden"
+        DEFM "* Test, ob K0 und K1 der CTC verbunden sind"
         DEFB 0DH,0AH
-        DEFM "- Interrupt alle 20 Millisekunden"
+        DEFM "* Test, ob ein Quarz an K0 angeschlossen ist"
+        DEFB 0DH,0AH,0DH,0AH
+        DEFM "--> AC1 System-CTC hat die I/O-Adresse: 00"
         DEFB 0DH,0AH
-        DEFM "- AC1 System-CTC hat die I/O-Adresse: 00"
-        DEFB 0DH,0AH
-        DEFM "- I/O-Adresse der AC1 Soundkarte-CTC: 3C"
+        DEFM "--> I/O-Adresse der AC1 Soundkarte-CTC: 3C"
         DEFB 0DH,0AH,0DH,0AH
         DEFM "Eingabe der I/O-Adresse (hex) = "
         DEFB 00H
@@ -154,21 +183,42 @@ ANFTXT: DEFB 0DH,0AH,0DH,0AH
 KORTXT: DEFM " --> Korrektur: "
         DEFB 00H
 ;
-BRKTXT: DEFB 0DH,0AH,0DH,0AH
-        DEFM "Abbruch!"
-        DEFB 0DH,0AH,0DH,0AH,00H
-;
 RDYTXT: DEFB 0DH,0AH,0DH,0AH
-        DEFM "Funktioniert!"
+        DEFM "--> CTC funktioniert!"
         DEFB 0DH,0AH,0DH,0AH,00H
 ;
-CTCTXT: DEFB 0DH,0AH
-        DEFM "Fehler: keine CTC auf dieser Adresse!"
+BRK1TX: DEFM "Abbruch: keine CTC erkannt!"
         DEFB 0DH,0AH,0DH,0AH,00H
 ;
-NL1TXT: DEFB 0DH,0AH,00H
+BRK2TX: DEFM "Abbruch: K0 und K1 sind nicht verbunden!"
+        DEFB 0DH,0AH,0DH,0AH,00H
 ;
-NL2TXT: DEFB 0DH,0AH,0DH,0AH,00H
+BRK3TX: DEFM "Abbruch: kein Quarz an K0 angeschlossen!"
+        DEFB 0DH,0AH,0DH,0AH,00H
+;
+K0TXT:  DEFB 0DH,0AH,0DH,0AH
+        DEFM "Interrupttest K0:"
+        DEFB 0DH,0AH,00H
+;
+K1TXT:  DEFB 0DH,0AH,0DH,0AH
+        DEFM "Interrupttest K1:"
+        DEFB 0DH,0AH,00H
+;
+K01TXT: DEFB 0DH,0AH,0DH,0AH
+        DEFM "Interrupttest K0 + K1:"
+        DEFB 0DH,0AH,00H
+;
+Q01TXT: DEFB 0DH,0AH,0DH,0AH
+        DEFM "Interrupttest mit Quarz an K0 + K1:"
+        DEFB 0DH,0AH,00H
+;
+; CTC-Programmierung
+; ==================
+;
+CTCK0:  DEFB 0A7H,157,3,3
+CTCK1:  DEFB 3,3,0A7H,157
+CTCK01: DEFB 27H,4,0C7H,39
+CTCQ01: DEFB 47H,157,0C7H,57
 ;
 ; Programmstart
 ; =============
@@ -198,6 +248,7 @@ START:
         LD   HL,ANFTXT    ;Anfangstext
         CALL OUTTXT
         CALL INHEX        ;1. HEX-Wert
+        CALL OUTZEI
         LD   H,C
         AND  0FH          ;Maske: 0..F
         RLCA
@@ -206,9 +257,10 @@ START:
         RLCA
         LD   D,A
         CALL INHEX        ;2. HEX-Wert
+        CALL OUTZEI
         AND  0CH          ;Maske: 0,4,8,C
         OR   D
-        LD   E,A          ;unteres I/O-Adressbyte
+        LD   E,A          ;E --> unteres I/O-Adressbyte
 ;
 ; Test der Eingabe
 ; ================
@@ -217,10 +269,10 @@ START:
         OR   '0'
         CP   3CH
         JR   NZ,TEST1
-        ADD  A,7          ;3C --> 'C'
+        ADD  A,7          ;3CH --> 'C'
 TEST1:  LD   L,A
         CP   C
-        JR   Z,TEST2
+        JR   Z,ISRINI     ;Eingabe o.k.
         PUSH HL
         LD   HL,KORTXT    ;--> Korrektur:
         CALL OUTTXT
@@ -229,114 +281,179 @@ TEST1:  LD   L,A
         CALL OUTZEI
         LD   C,L
         CALL OUTZEI
-TEST2:  LD   HL,NL2TXT
+;
+; ISR-Init. + CTC-Reset
+; =====================
+;
+ISRINI: DI
+        LD   HL,ISRCTC    ;Einsprungpunkt ISR
+        LD   (IV),HL
+        LD   (IV+2),HL
+        LD   A,HIGH(IV)   ;Int.-vektor HWT
+        LD   I,A
+        LD   B,0          ;oberes I/O-Adressbyte
+        LD   C,E          ;unteres I/O-Adressbyte
+        LD   A,3          ;CTC-Reset
+        OUT  (C),A
+NEXT:   INC  C            ;I/O-Adresse++
+        OUT  (C),A
+        INC  C
+        OUT  (C),A
+        INC  C
+        OUT  (C),A        ;Komplett-Reset wg. HRCPM12!
+;
+; Testroutinen und Finis
+; ======================
+;
+        LD   HL,K0TXT     ;Kanal 1
         CALL OUTTXT
+        LD   IX,CTCK0
+        CALL CTCINI
+        OR   A
+        JR   NZ,BREAK1
+;
+        LD   HL,K1TXT     ;Kanal 2
+        CALL OUTTXT
+        LD   IX,CTCK1
+        CALL CTCINI
+        OR   A
+        JR   NZ,BREAK1
+;
+        LD   HL,K01TXT    ;Kanal 1 + Kanal 2
+        CALL OUTTXT
+        LD   IX,CTCK01
+        CALL CTCINI
+        OR   A
+        JR   NZ,BREAK2
+;
+        LD   HL,Q01TXT    ;Quarz an K0 + K1
+        CALL OUTTXT
+        LD   IX,CTCQ01
+        CALL CTCINI
+        OR   A
+        JR   NZ,BREAK3
+;
+        LD   HL,RDYTXT    ;CTC funktioniert!
+        CALL OUTTXT
+        JR   FINIS
+;
+BREAK1: LD   HL,BRK1TX    ;Abbruch: keine CTC erkannt!
+        CALL OUTTXT
+        JR   FINIS
+;
+BREAK2: LD   HL,BRK2TX    ;Abbruch: K0 und K1 sind nicht verbunden!
+        CALL OUTTXT
+        JR   FINIS
+;
+BREAK3: LD   HL,BRK3TX    ;Abbruch: kein Quarz an K0 angeschlossen!
+        CALL OUTTXT
+;
+FINIS:
+        IFDEF CPM
+        JP   WBOOT        ;CP/M: WBOOT
+        ELSE
+        JP   GETCO        ;AC1-Monitor
+        ENDIF
 ;
 ; CTC - Initialisierung
 ; =====================
 ;
-        DI
-        LD   HL,ISRCTC    ;Einsprungpunkt CTC-Interrupt
-        LD   (IV+2),HL
-        LD   A,HIGH(IV)   ;Int.-vektor HWT
-        LD   I,A
-        LD   A,LOW(IV)    ;Int.-vektor NWT --> 4008H
-        LD   B,0          ;oberes I/O-Adressbyte
+CTCINI: LD   B,0          ;oberes I/O-Adressbyte
         LD   C,E          ;unteres I/O-Adressbyte
+        LD   A,LOW(IV)    ;Int.-vektor NWT
         OUT  (C),A
-        LD   A,27H        ;Kanalsteuerwort
+        LD   A,(IX)       ;Kanalsteuerwort K1
         OUT  (C),A
-        LD   A,4          ;Zeitkonstante
+        LD   A,(IX+1)     ;Zeitkonstante K1
         OUT  (C),A
-        INC  C            ;I/O-Adressbyte + 1
-        LD   A,0C7H       ;Kanalsteuerwort
+        INC  C            ;I/O-Adresse++
+        LD   A,(IX+2)     ;Kanalsteuerwort K2
         OUT  (C),A
-        LD   A,39         ;Zeitkonstante
+        LD   A,(IX+3)     ;Zeitkonstante K2
         OUT  (C),A
         IM   2
 ;
 ; Interruptfreigabe und Loop
 ; ==========================
 ;
-
+        LD   B,58         ;Anzahl der Zeichen
+        LD   C,'A'        ;1. Zeichen
+        LD   D,5          ;Zaehler #2 fuer Abbruch
+        LD   HL,0         ;Zaehler #1 fuer Abbruch
+        LD   (CHARBC),BC
+        LD   (CNTRDE),DE
+        LD   (CNTRHL),HL
         EI
-        LD   C,' '        ;1. Zeichen
-        LD   B,191        ;Anzahl der Zeichen
-        LD   HL,0
-        LD   D,5
-M1:     DEC  HL
+;
+LOOP1:  LD   HL,(CNTRHL)  ;Loop: Warten auf Interrupts
+        DEC  HL
         LD   A,H
         OR   L
-        JR   NZ,M2
+        JR   NZ,LOOP2
+        LD   DE,(CNTRDE)
         DEC  D
-        JR   Z,NOCTC      ;keine CTC auf dieser Adresse!
-M2:     INC  B
-        DEC  B
-        JR   NZ,M1
+        LD   A,1
+        RET  Z            ;Abbruch: keine CTC erkannt!
+        LD   (CNTRDE),DE
+LOOP2:  LD   (CNTRHL),HL
+        LD   BC,(CHARBC)
+        INC  B
+        DEC  B 
+        JR   NZ,LOOP1
 ;
-; Programmende
-; ============
+; CTC-Reset K0 + K1
+; =================
 ;
-        LD   A,03H        ;Kanalsteuerwort - Reset
         LD   B,0          ;oberes I/O-Adressbyte
         LD   C,E          ;unteres I/O-Adressbyte
+        LD   A,3          ;CTC-Reset
         OUT  (C),A
-        INC  C            ;I/O-Adressbyte + 1
+        INC  C            ;I/O-Adresse++
         OUT  (C),A
-        LD   HL,RDYTXT    ;Funktioniert!
-        CALL OUTTXT
-FINIS:
-        IFDEF CPM
-        JP   WBOOT        ;CP/M: WBOOT
-        ELSE
-        JP   GETCO        ;AC1: Eingabeschleife
-        ENDIF
-;
-NOCTC:  LD   HL,CTCTXT    ;keine CTC auf dieser Adresse!
-        CALL OUTTXT
-        JR   FINIS
-;
-; Eingabe und Ausgabe einer HEX-Ziffer (Erg. in A + C)
-; ====================================
-;
-INHEX:  CALL INZEI        ;Zeicheneingabe --> A
-        LD   C,A
-        CP   03H          ;Abbruch?
-        JP   Z,ABRUCH
-        CP   '0'          ;kleiner als "0"?
-        JR   C,INHEX
-        CP   '9'+1        ;kleiner als "9"?
-        JR   C,INHEXE
-        AND  5FH          ;Kleinbuchstaben --> Grossb.
-        CP   'A'          ;kleiner als "A"?
-        JR   C,INHEX
-        CP   'F'+1        ;groesser als "F"?
-        JR   NC,INHEX
-        LD   C,A
-        SUB  7
-INHEXE: CALL OUTZEI       ;Zeichen in C ausgeben
-        SUB  '0'
-        RET
-;
-ABRUCH: LD   HL,BRKTXT    ;Anzeige: Abbruch!
-        CALL OUTTXT
-        JR   FINIS
+        XOR  A
+        RET               ;alle Zeichen ausgegeben
 ;
 ; Interrupt-Serviceroutine
 ; ========================
 ;
-ISRCTC: DI                ;Interruptentry
-        LD   HL,0
-        LD   D,5
+ISRCTC: LD   (SAVSTK),SP  ;DI kann wegbleiben
+        LD   SP,ISRSTK    ;eigener ISR-Stack
+        EI
+        PUSH AF
+        PUSH BC
+        PUSH DE
+        PUSH HL
+        LD   BC,(CHARBC)
+        LD   DE,(CNTRDE)
+        LD   HL,0         ;Zaehler #1 ruecksetzen
+        LD   D,5          ;Zaehler #2 ruecksetzen
         CALL OUTZEI       ;Zeichen in C ausgeben
         INC  C
         DEC  B
         LD   A,C
         CP   7FH
-        JR   NZ,M3
+        JR   NZ,ISR2
         LD   C,' '
-M3:     EI
+ISR2:   LD   (CHARBC),BC
+        LD   (CNTRDE),DE
+        LD   (CNTRHL),HL
+        POP  HL
+        POP  DE
+        POP  BC
+        POP  AF
+        DI
+        LD   SP,(SAVSTK)
+        EI
         RETI
+;
+; Speicherzellen
+; ==============
+;
+CHARBC: DEFW 0            ;Zeichenausgabe ISR + Counter
+CNTRDE: DEFW 0            ;Zaehler #2 fuer Abbruch + I/O Adr.
+CNTRHL: DEFW 0            ;Zaehler #1 fuer Abbruch
+SAVSTK: DEFS 40,0         ;eigener ISR-Stack
+ISRSTK:
 ;
         DEFM "finis"
 ;

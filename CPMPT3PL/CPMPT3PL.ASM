@@ -39,7 +39,7 @@
 ;-------------------------------------------------
 
 ;Version 1.0.4
-;27.05.2022
+;WeRo 27.05.2022
 ;Anpassung für AC1-2010 mit 4 MHz CPU-Takt:
 ;* HL-Registerwert bei der VDIP-Initialisierung
 ;  auf 600h gesetzt
@@ -56,6 +56,12 @@
 ;10.11.2026
 ;Anpassung für AC1-2010 und picoAC1:
 ;* User-Interrupt-Tabelle von 0xFF90 bis 0xFF9F
+;KW 20.11.2026
+;* Ausstieg zum OS beim AC1 CPM143 mit RET, sonst evtl. Probleme
+;* NEU: Zufallswiedergabe der Songs auf dem USB-Stick
+;  Nach Vorlage vom WeRo (Player für KC87)
+;  Menue erweitert, MODUS anzeigen
+;  IM2 nachgetragen... für AC1 notwendig I=FFh  !!!!!
 ;------------------------------------------------
 
 AYBAS:   EQU     38H
@@ -114,6 +120,7 @@ ASCII:      DEFW    0           ;WORD,  BWS-ADRESSE SEL. EINTRAG
 TICKS:      DEFW    0           ;SPIELDAUER IN INTERRUPTS
 SNR:        DEFW    0           ;WORD, AKT. SONGNUMMER
 CURPOS:     DEFW    0000h
+SEED:       DEFW    0           ;WORD, STARTWERT ZUFALLSGENERATOR
 
 ;USB-BEZÜGE
 DIRANZ:     DEFW    0           ;ANZAHL BEI DIR
@@ -130,8 +137,23 @@ KATPOS:     DEFW    0           ;WORD, AKT. POSI IM KATALOG
 ;------------------------------------------------
 START0: 
             ;lokalen Stack einrichten
-            LD      (SPSV),SP ;Stackpointer merken
-            LD      SP, STACK ;lokaler Stack
+            LD      (SPSV),SP   ;Stackpointer merken
+            LD      SP, STACK   ;lokaler Stack
+            ld      a,i
+            cp      0E6h
+            jr      nz,intok
+            call    cls    
+            ld      de,T_NOCPM  ;falsche CPM Versio
+            call    prnst
+warttast:   call    consts
+            cp      0
+            jr      z,warttast
+            jp      raus
+            
+intok:      ld      a,hi ctcint ;für AC1 notwendig
+            ld      i,a     
+            im      2
+            ei   
             xor     a
             LD      (PAUSE),A   ;NICHT PAUSIEREN 
         
@@ -176,6 +198,8 @@ FNKT:       CALL    CONSI         ;ABFRAGE FUNKTION
             JP      Z,LISTE       
             CP      "a"           ;Alles spielen
             JP      Z,SERIE
+            CP      "z"           ;ZUFALLSMODUS
+            JP      Z,ZUFALL
             CP      "u"           ;USB-INIT
             JP      Z,start0c
             CP      "i"
@@ -191,7 +215,10 @@ HOME1:      LD      HL,ROOT
 RAUS:       CALL    CUON
             EI
             LD      SP,(SPSV)     ;alten Stackpointer zurückholen
-            jp      0             ;ZURÜCK ZUM OS
+            ;
+            ret                   ;beim AC1 mit RET zurück !!!
+            ; jp    0             ;zurück zum OS
+            
 ;-----------------------------------------------
 ;PROGRAMMINFO AUSGEBEN                
 INFOT:      CALL    CLS
@@ -217,33 +244,33 @@ DESK:       XOR     A
             ;
             ;FESTE SONGDATEN:
             ;SONGNUMMER------------------------------
-            LD      DE,060DH      ;BS-POSITION
+            LD      DE,070DH      ;BS-POSITION
             LD      (CURPOS),DE
             CALL    SETCUR
             LD      DE,(SNR)
             CALL    DEZDE 
             ;MAX SONGNUMMER--------------------------
-            LD      DE,0616H      ;BS-POSITION
+            LD      DE,0716H      ;BS-POSITION
             LD      (CURPOS),DE
             CALL    SETCUR
             LD      DE,(MAX)
             CALL    DEZDE 
             ;TITELANZEIGE----------------------------
-            LD      DE,080DH      ;BS-POSITION
+            LD      DE,090DH      ;BS-POSITION
             LD      (CURPOS),DE
             CALL    SETCUR
             LD      HL,SONG+30    ;AB HIER
             CALL    INFO          ;32 BYTES 
             ;
             ;SONGAUTOR-------------------------------
-            LD      DE,090DH        
+            LD      DE,0A0DH        
             LD      (CURPOS),DE
             CALL    SETCUR
             LD      HL,SONG+66
             CALL    INFO
             ;
             ;SPIELDAUER------------------------------
-            LD      DE,0B0DH                
+            LD      DE,0C0DH                
             LD      (CURPOS),DE
             CALL    SETCUR
             CALL    CALC          ;H=MINUTEN, L=SEKUNDEN
@@ -259,19 +286,26 @@ DESK:       XOR     A
             LD      (TICKS),HL    ;MERKEN
             ;
             ;TEMPO-----------------------------------
-            LD      DE,0C0DH
+            LD      DE,0D0DH
             LD      (CURPOS),DE
             CALL    SETCUR     
             LD      A,(SONG+100)  ;TEMPOWERT
             CALL    DEZA
             ;
             ;MAX. MUSTERANZAHL-----------------------
-            LD      DE,0D14H
+            LD      DE,0E14H
             LD      (CURPOS),DE
             CALL    SETCUR
             LD      A,(SONG+101)
             CALL    DEZA
             ;
+            ;MODUS-----------------------------
+            LD      DE,060Dh      ;Zeile 5, Spalte 13
+            ld      (curpos),de
+            CALL    SETCUR
+            LD      A,(MODNR)
+            CALL    MODUS 
+
             ;SONG STARTEN----------------------------
             CALL    PLAY          ;INIT+STARTEN
             HALT                  ;SYNCHR.
@@ -279,24 +313,24 @@ DESK:       XOR     A
 DESK2:      ;SCHLEIFE WÄHREND ABSPIEL----------------
             ;
             ;LFD.MUSTERNUMMER------------------------
-            LD      DE,0D0DH
+            LD      DE,0E0DH
             LD      (CURPOS),DE
             CALL    SETCUR
             LD      A,(POSI)
             CALL    DEZA
             ;
             ;PEGELANZEIGE BEDIENEN-------------------
-            LD      DE,0F0DH
+            LD      DE,100DH
             LD      (CURPOS),DE
             CALL    SETCUR
             LD      A,(VOL_A)     
             CALL    PEGEL
-            LD      DE,100DH
+            LD      DE,110DH
             LD      (CURPOS),DE
             CALL    SETCUR
             LD      A,(VOL_B)
             CALL    PEGEL
-            LD      DE,110DH
+            LD      DE,120DH
             LD      (CURPOS),DE
             CALL    SETCUR
             LD      A,(VOL_C)
@@ -309,7 +343,7 @@ DESK2:      ;SCHLEIFE WÄHREND ABSPIEL----------------
             PUSH    HL
             LD      A,H
             PUSH    AF
-            LD      DE,0B1Ch
+            LD      DE,0C1Ch
             LD      (CURPOS),DE
             CALL    SETCUR
             POP     AF 
@@ -319,7 +353,7 @@ DESK2:      ;SCHLEIFE WÄHREND ABSPIEL----------------
             POP     HL
             LD      A,L
             PUSH    AF
-            LD      DE,0B1Fh
+            LD      DE,0C1Fh
             LD      (CURPOS),DE
             CALL    SETCUR
             POP     AF 
@@ -331,7 +365,7 @@ UEBERL:     ;SONG FERTIG?----------------------------
             ;NOCH NICHT:
             ;
             ;ABFRAGE TASTATUR------------------------
-            LD      DE,0E05H
+            LD      DE,0F05H
             LD      (CURPOS),DE
             CALL    SETCUR
             CALL    CONSTS_2
@@ -377,7 +411,7 @@ TI:         LD      A,(HL)
 
 ;-------------------------------------------------
 PAU_EA:     ;PAUSE EIN/AUS
-            LD      DE,101DH
+            LD      DE,111DH
             LD      (CURPOS),DE
             CALL    SETCUR
             PUSH    AF
@@ -394,7 +428,7 @@ PAU1:       CALL    PRNST
             JP      DESK2
 
 ;-------------------------------------------------
-LOOP_EA:    LD      DE,1521H
+LOOP_EA:    LD      DE,1621H
             LD      (CURPOS),DE
             CALL    SETCUR
             PUSH    AF
@@ -718,7 +752,99 @@ SERIE16: INC     HL             ;1. ZEICHEN NAME
 SONG1:  LD      HL,1            ;SONG-NR AUF 1 SETZEN
         LD      (SNR),HL
         RET 
-       
+
+ ;ZUFALLSWIEDERGABE--------------------------------        
+ZUFALL: LD      A,3
+        LD      (MODNR),A
+        CALL    CLS
+        ;GUCKEN, OB SCHON MAL GEZÄHLT:
+        LD      HL,(TMAX)
+        LD      A,H
+        OR      L
+        JR      NZ,ZUF2         ;JA, SUMME VORHANDEN
+        ;NOCH NICHT, ERST ZÄHLEN:
+        LD      DE,090CH  
+        ld      (curpos),de  
+        CALL    SETCUR
+        LD      DE,T_ZAEHLE     
+        CALL    PRNST  
+        CALL    CUOFF
+        LD      A,2             ;NUR ZÄHLEN
+        LD      (DIRFLG),A      ;
+        CALL    DIR             ;DIR
+        ;(DATANZ) IST BEFÜLLT
+        LD      HL,(DIRANZ)
+        LD      (TMAX),HL       ;ANZAHL MERKEN
+        CALL    ISNULL          ;BESTAND?
+        JR      NZ,ZUF1         ;JA
+        LD      DE,0A0CH
+        ld      (curpos),de   
+        CALL    SETCUR
+        LD      DE,T_NIX        ;NEIN
+        CALL    PRNST
+        JP      RESTART
+        ;SUMME ANZEIGEN:
+ZUF1:   PUSH    HL
+        POP     DE
+        CALL    DEZDE
+ZUF2:   LD      DE,0A0CH        ;MITTIG
+        CALL    SETCUR
+        ld      (curpos),de
+        LD      DE,T_SUCHE     
+        CALL    PRNST  
+        CALL    CUOFF
+ZUF5:   CALL    SHORT           ;KURZE PAUSE 
+        LD      A,R
+        LD      (SEED),A
+        CALL    ZUFGEN          ;ZUFALLSZAHL
+        INC     HL              ;DA 0...N-1
+        LD      (ASCII),HL      ;NUMMER MERKEN
+        ;PER DIR MIT NUMMER SONGNAME HOLEN
+        LD      A,3             ;HOLEN DATEINAME
+        LD      (DIRFLG),A      ;
+        CALL    DIR             ;DIR
+        ;IN INBUFF STEHT DATEINAME,OHNE 0D
+        ;UMKOPIEREN NACH NAMBUF
+        LD      HL,INBUFF
+        LD      DE,NAMBUF
+        LD      A,"."
+ZUF3:   LDI
+        CP      (HL)
+        JR      NZ,ZUF3         ;.SUCHEN
+        LDI     ;.              ;ENDUNG+0D ANHÄNGEN!
+        LDI     ;P
+        LDI     ;T
+        LDI     ;3
+        LD      A,0DH
+        LD      (DE),A
+        ;ANZEIGE AUSGEWÄHLER ZUFALLSSONG
+      ;CALL    INVERS           ;EIN
+        LD      DE,NAMBUF
+        CALL    PRNAM
+      ;CALL    INVERS           ;AUS
+        CALL    CUOFF
+        CALL    SHORT           ;KURZE PAUSE
+        LD      HL,SONG         ;LADEADRESSE
+        LD      (RAMADR),HL     ;DORTHIN! 
+        CALL    _LADEUSB        ;CARRY, WENN FEHLER
+        JP      C,RESTART 
+        LD      HL,(ASCII)
+        LD      (SNR),HL        ;ZUFALLSNUMMER
+        LD      HL,(TMAX)
+        LD      (MAX),HL        ;GESAMTANZAHL
+ZUF4:   CALL    DESK
+        PUSH    AF
+        CALL    STOPP
+        POP     AF
+        CP      "-"
+        JP      Z,ZUF4          ;AKTUELLEN SONG NOCHMAL
+        CP      "m"
+        JP      Z,START1        ;JA ENDE, ZUM MENÜ
+        CP      "M"
+        JP      Z,START1        ;JA ENDE, ZUM MENÜ
+        ;WAR + ODER SONGENDE: 
+        JP      ZUFALL          ;NEUER ZUFALLSSONG
+                             
 ;-------------------------------------------------
 ;DEZIMALAUSGABE 
 ;-------------------------------------------------
@@ -728,6 +854,7 @@ DEZA:       ;WERT IN A, AUSGABE 2STELLIG, MIT VORNULL
             LD      C,30H         ;MIT VORNULL
             JR      DEZ1  
 DEZDE:      ;WERT IN DE, AUSGABE 3STELLIG, OHNE VORNULL
+           ;LD      C,30H         ;MIT VORNULL 
             LD      C," "         ;OHNE VORNULL
             LD      HL,0063H      ;99
             AND     A
@@ -1218,6 +1345,65 @@ SHORT1: DEC     BC
         POP     BC
         RET
 
+;------------------------------------------------
+;ZUFALLSGENERATOR
+;SEED WIRD BEIM PROGRAMMSTART GESETZT (R-REGISTER)
+ZUFGEN: LD      DE,(SEED)       ;STARTWERT
+        LD      A,D
+        LD      H,E
+        LD      L,253
+        OR      A
+        SBC     HL,DE
+        SBC     A,0
+        SBC     HL,DE
+        LD      D,0
+        SBC     A,D
+        LD      E,A
+        SBC     HL,DE
+        JR      NC,RAND
+        INC     HL
+RAND:   LD      (SEED),HL      ;SEED GGF. FÜR NÄCHSTEN LAUF
+        ;HL= PSEUDO-ZUFALLSZAHL 0000...FFFF
+        ;BEGRENZEN AUF (TMAX) : DIVISION, REST NEHMEN!
+        LD      DE,(TMAX)
+        LD      A,H
+        LD      C,L
+        ;DIV_AC_DE, REST IN HL
+        LD      HL, 0
+        LD      B, 16
+Z_LOOP: DEFB    0CBh,31h       ;"SLL C"=UNDOKUMENTIERTER OP-CODE
+        RLA
+        ADC     HL, HL
+        SBC     HL, DE
+        JR      NC, $+4
+        ADD     HL, DE
+        DEC     C
+        DJNZ    Z_LOOP
+        ;REST=HL=BEGRENZTE ZAHL 0...(DATANZ-1)
+        RET
+
+;------------------------------------------------
+;MODUS ANZEIGEN        
+;------------------------------------------------        
+MODUS:  cp      0             ;Einzel
+        jr      z,MO0
+        cp      1
+        jr      z,MO1         ;Liste
+        cp      2
+        jr      z,MO2         ;Serie  
+        ld      de,T_MODUS3   ;Zufall
+        call    prnst
+        ret     
+
+MO0:    ld      de,T_MODUS0
+        call    prnst
+        ret
+MO1:    ld      de,T_MODUS1
+        call    prnst
+        ret
+MO2:    ld      de,T_MODUS2
+        call    prnst
+        ret
 ;-------------------------------------------------
 ;BDOS-FUNKTIONEN
 ;-------------------------------------------------
@@ -1329,24 +1515,23 @@ zeile:      DEFB    80H           ;Zeile+80h
 spalte:     DEFB    80H           ;Spalte+80h
             DEFB    24H           ;Ende ZK
 ;-------------------------------------------------
-T_INFO:     DEFM "      UNTER VERWENDUNG FOLGENDER GRUNDROUTINEN:",0Dh,0Ah
-            DEFB 0Ah
+T_INFO:     DEFM "      UNTER VERWENDUNG FOLGENDER GRUNDROUTINEN:",0Dh,0Ah,0Ah
             DEFM "      *PT3 PLAYER ZX SPECTRUM : S. BULBA, 2007",0Dh,0Ah
-            DEFM "      *PT3 DURATION CALCULATOR: S. BULBA, 2005",0Dh,0Ah
-            DEFB 0Ah
+            DEFM "      *PT3 DURATION CALCULATOR: S. BULBA, 2005",0Dh,0Ah,0Ah
             DEFM "      PLAYEROBERFLAECHE, USB UNTERSTUETZUNG UND",0Dh,0Ah
-            DEFM "      ANPASSUNG AN CP/M: WeRo / KW / HP, 2018",0Dh,0Ah 
+            DEFM "      ANPASSUNG AN CP/M: WeRo / KW / HP, 2018/26",0Dh,0Ah 
             DEFM "      Anpassung an AC1-2010 mit 4 MHz CPU-Takt",024h 
 ;-------------------------------------------------
 KOPFT:      DEFB  0CH,0DH,0AH
             DEFM  "      USB-PT3-PLAYER - CP/M-VERSION  (v.1.0.5)",0DH,0AH
-            DEFM  "         (C)S.BULBA-2007 / WeRo/KW/HP-2018",0DH,0AH
+            DEFM  "       (C)S.BULBA-2007 / WeRo/KW/HP-2018/26",0DH,0AH
             DEFM  "      ----------------------------------------",0DH,0AH
             DEFB  0DH,0AH,0AH,024h
 ;-------------------------------------------------
 BEFEHLE:    DEFM  "     (L)ADEN EINZELSONG",0DH,0AH,0AH 
             DEFM  "     (P)LAYLISTE  SPIELEN",0DH,0AH,0AH
-            DEFM  "     (A)LLE SONGS SPIELEN",0DH,0AH,0AH 
+            DEFM  "     (A)LLE SONGS SPIELEN",0DH,0AH,0AH
+            DEFM  "     (Z)UFALLSWIEDERGABE",0DH,0AH,0AH    
             DEFM  "     (U)SB STICKWECHSEL/INIT",0DH,0AH,0AH
             DEFM  "     (I)INFO",0DH,0AH,0AH          
             DEFM  "     (E)NDE",0DH,0AH,0AH  
@@ -1354,9 +1539,10 @@ BEFEHLE:    DEFM  "     (L)ADEN EINZELSONG",0DH,0AH,0AH
 ;-------------------------------------------------
 T_SCR:      DEFB  0CH,0DH,0AH
             DEFM  "      USB-PT3-PLAYER - CP/M-VERSION  (v.1.0.5)",0DH,0AH
-            DEFM  "         (C)S.BULBA-2007 / WeRo/KW/HP-2018",0DH,0AH
+            DEFM  "        (C)S.BULBA-2007 / WeRo/KW/HP-2018/26",0DH,0AH
             DEFM  "      ----------------------------------------",0DH,0AH
             DEFM  0DH,0AH,0AH
+            DEFM  "     MODUS :             ",0DH,0AH
             DEFM  "     SONG  :     von     "
             DEFM  0DH,0AH,0AH
             DEFM  "     TITEL :"
@@ -1392,19 +1578,30 @@ T_NOSTC:    DEFM   "      KEIN PT3-VERZEICHNIS!",0DH,0AH,024h
 T_ZUVIEL:   DEFM   "ZU VIELE SONGS, NUR EINZELMODUS!",024h
 T_WEITER:   DEFM   0DH,0AH,"<ET>=DIR, <.=ABBRUCH>",024h
 T_NAM:      DEFM   0DH,0AH,"DATEINAME (OHNE .PT3) ? ",024h
+T_ZAEHLE:   DEFM   "ZAEHLEN...",024h
 T_LADE:     DEFM   "LADEN: ",024h
+T_SUCHE:    DEFM   "SUCHEN...",024h
 T_EINLES:   DEFM   "LESE SONGS EIN...",024h
 T_PAUSE:    DEFM   "PAUSE ",024h
 T_PAUSEON:  DEFM   ">>> PAUSE <<<",024h
 T_PAUSEOFF: DEFM   "             ",024h
 T_STAPEL:   DEFM   "PLAYLISTE...",024h
 T_BNAM:     DEFM   "!PLAYLST.TXT",0DH,024h
+T_MODUS0:   DEFM   "EINZELSONG SPIELEN",024h
+T_MODUS1:   DEFM   "PLAYLISTE SPIELEN",024h
+T_MODUS2:   DEFM   "ALLE SONGS SPIELEN",024h
+T_MODUS3:   DEFM   "ZUFALLSWIEDERGABE DER SONGS",024h
 ;
 T_INIT:     DEFM   0ah,"      INIT USB...",024h
 T_NOPT3:    DEFM   "      KEIN PT3-VERZEICHNIS!",0DH,0AH,024h
 T_NIX:      DEFM   "KEINE SONGS IN /PT3!",024h
 ;
 UNZUL:      DEFM    0DH,0AH,"EINGABE UNZULAESSIG",24h
+
+T_NOCPM:    DEFM    0DH,0AH,
+            DEFM    "Falsche AC1 - CPM Version!!!!",0Dh,0Ah
+            DEFM    "Bitte CPM53, CPM144, CPM.A28 oder CPMVT nutzen",0Dh,0Ah,0Ah
+            DEFM    "Taste zum Beenden druecken....",24h
 ;
 RANGE:      DEFM    "1234567890"
             DEFM    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"

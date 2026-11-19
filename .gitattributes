@@ -5,6 +5,7 @@
 *.PRN text eol=crlf
 *.COM binary
 *.Z80 binary
+*.APJ binary
 *.ASM linguist-language=Assembly linguist-detectable
 *.INC linguist-language=Assembly linguist-detectable
 *.MAC linguist-language=Assembly linguist-detectable
